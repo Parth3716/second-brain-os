@@ -1,0 +1,57 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../app/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Task {
+  id          String    @id @default(uuid())
+  title       String
+  status      String    @default("BACKLOG")
+  dailyItems  DailyPlanItem[]
+}
+
+model Habit {
+  id            String    @id @default(uuid())
+  title         String
+  defaultCycles Int
+  daysOfWeek    Int[]
+  dailyItems  DailyPlanItem[]
+}
+
+model DailyRecord {
+  date        DateTime  @id
+  status      String    @default("ACTIVE")
+  notes       String?
+  items       DailyPlanItem[]
+}
+
+model DailyPlanItem {
+  id              String    @id @default(uuid())
+  date            DateTime
+  dailyRecord     DailyRecord @relation(fields: [date], references: [date])
+  taskId          String?
+  task            Task?     @relation(fields: [taskId], references: [id])
+  habitId         String?
+  habit           Habit?    @relation(fields: [habitId], references: [id])
+  title           String
+  orderIndex      Int
+  estimatedCycles Int
+  status          String    @default("TODO")
+  timeEntries     TimeEntry[]
+}
+
+model TimeEntry {
+  id              String    @id @default(uuid())
+  planItemId      String?   
+  planItem        DailyPlanItem? @relation(fields: [planItemId], references: [id])
+  title           String
+  startedAt       DateTime
+  endedAt         DateTime?
+  durationMin     Int?
+  entryType       String    @default("LIVE_TRACKED")
+  notes           String?
+}
