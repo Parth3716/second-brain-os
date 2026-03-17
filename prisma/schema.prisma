@@ -24,7 +24,7 @@ model Habit {
 
 model DailyRecord {
   date        DateTime  @id
-  status      String    @default("ACTIVE")
+  status      String    @default("PLANNING")
   notes       String?
   items       DailyPlanItem[]
 }
@@ -51,7 +51,7 @@ model TimeEntry {
   title           String
   startedAt       DateTime
   endedAt         DateTime?
-  durationMin     Int?
+  durationSeconds     Int?
   entryType       String    @default("LIVE_TRACKED")
   notes           String?
 }

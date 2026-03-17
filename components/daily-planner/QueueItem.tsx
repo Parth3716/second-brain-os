@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { moveItemUp, moveItemDown, removeItemFromQueue } from "@/actions/daily-planner";
+import { moveItemUpInQueue, moveItemDownInQueue, removeItemFromQueue, logPastEntry } from "../../actions/daily-planner";
 
 type QueueItemProps = {
   id: string;
@@ -27,12 +27,12 @@ export default function QueueItem({ id, title, estimatedCycles, isFirst, isLast 
           
           {/* REORDERING ARROWS */}
           <div className="flex flex-col gap-1 pr-2 border-r border-slate-700/50">
-            <form action={async () => { await moveItemUp(id); }}>
+            <form action={async () => { await moveItemUpInQueue(id); }}>
               <button disabled={isFirst} className="text-slate-600 hover:text-slate-300 disabled:opacity-20 transition-colors">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m18 15-6-6-6 6"/></svg>
               </button>
             </form>
-            <form action={async () => { await moveItemDown(id); }}>
+            <form action={async () => { await moveItemDownInQueue(id); }}>
               <button disabled={isLast} className="text-slate-600 hover:text-slate-300 disabled:opacity-20 transition-colors">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6"/></svg>
               </button>
@@ -71,34 +71,76 @@ export default function QueueItem({ id, title, estimatedCycles, isFirst, isLast 
         </div>
       </li>
 
-      {/* --- RETROACTIVE MODAL REMAINS THE SAME --- */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="bg-slate-900 border border-slate-700 rounded-xl shadow-2xl w-full max-w-lg overflow-hidden">
+          <div className="bg-slate-900 border border-slate-700 rounded-xl shadow-2xl w-full max-w-lg overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            
             <div className="flex justify-between items-center bg-slate-800/50 p-4 border-b border-slate-700">
-              <h3 className="font-medium text-slate-200 flex items-center gap-2"><span>🔙</span> Retroactive Log</h3>
+              <h3 className="font-medium text-slate-200 flex items-center gap-2">
+                <span>🔙</span> Retroactive Log
+              </h3>
               <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-white">✖</button>
             </div>
-            <div className="p-6 space-y-6">
-              <div>
-                <label className="block text-xs font-medium text-slate-400 mb-2">Task</label>
-                <div className="bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-300 text-sm">{title}</div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
+
+            {/* We convert the body into a real form that calls our Server Action */}
+            <form action={async (formData) => {
+              await logPastEntry(formData);
+              setIsModalOpen(false); // Close modal on success!
+            }}>
+              
+              {/* Hidden input to secretly pass the ID to the server */}
+              <input type="hidden" name="itemId" value={id} />
+
+              <div className="p-6 space-y-6">
                 <div>
-                  <label className="block text-xs font-medium text-slate-400 mb-2">Start</label>
-                  <input type="time" defaultValue="07:30" className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-300 focus:outline-none" />
+                  <label className="block text-xs font-medium text-slate-400 uppercase tracking-widest mb-2">Task</label>
+                  <div className="bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-300 text-sm">
+                    {title}
+                  </div>
                 </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-medium text-slate-400 uppercase tracking-widest mb-2">Start Time</label>
+                    <input 
+                      type="time" 
+                      name="startTime"
+                      required
+                      defaultValue="09:00" 
+                      className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-300 focus:border-blue-500 focus:outline-none" 
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-400 uppercase tracking-widest mb-2">End Time</label>
+                    <input 
+                      type="time" 
+                      name="endTime"
+                      required
+                      defaultValue="10:00" 
+                      className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-300 focus:border-blue-500 focus:outline-none" 
+                    />
+                  </div>
+                </div>
+
                 <div>
-                  <label className="block text-xs font-medium text-slate-400 mb-2">End</label>
-                  <input type="time" defaultValue="09:00" className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-300 focus:outline-none" />
+                  <label className="block text-xs font-medium text-slate-400 uppercase tracking-widest mb-2">Note (Optional)</label>
+                  <textarea 
+                    name="note"
+                    placeholder="Hit a new PR on squats!" 
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-300 focus:border-blue-500 focus:outline-none min-h-[80px]"
+                  />
                 </div>
               </div>
-            </div>
-            <div className="flex justify-end gap-3 p-4 border-t border-slate-800 bg-slate-900/50">
-              <button onClick={() => setIsModalOpen(false)} className="px-4 py-2 text-sm font-medium text-slate-400 hover:text-white">Cancel</button>
-              <button onClick={() => setIsModalOpen(false)} className="px-5 py-2 text-sm font-medium bg-blue-600 hover:bg-blue-500 text-white rounded-lg">✔ Save to Timeline</button>
-            </div>
+
+              <div className="flex justify-end gap-3 p-4 border-t border-slate-800 bg-slate-900/50">
+                <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 text-sm font-medium text-slate-400 hover:text-white transition-colors">
+                  Cancel
+                </button>
+                <button type="submit" className="px-5 py-2 text-sm font-medium bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-colors flex items-center gap-2 shadow-lg shadow-blue-900/20">
+                  ✔ Save to Timeline
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
