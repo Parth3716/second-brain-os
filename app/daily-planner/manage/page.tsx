@@ -4,7 +4,7 @@ import { getCurrentDateIST } from "@/lib/helpers";
 
 export const dynamic = "force-dynamic";
 
-export default async function ManageUniversePage() {
+export default async function ManagePage() {
   const currentDate = getCurrentDateIST();
 
   const backlogTasks = await prisma.task.findMany({

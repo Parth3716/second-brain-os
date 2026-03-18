@@ -1,12 +1,13 @@
 import {prisma} from "@/lib/prisma_client"
-import { initializeDailyRecordAndHabits } from "@/actions/daily-planner"
+import { initializeDailyRecordAndHabits, cleanupGhostDays } from "@/actions/daily-planner"
 import { getCurrentDateIST, formatDisplayDateIST } from "@/lib/helpers"
 import PlanningView from "@/components/daily-planner/views/PlanningView"
 import HUDView from "@/components/daily-planner/views/HUDView"
 import ReviewView from "@/components/daily-planner/views/ReviewView"
 import RestDayView from "@/components/daily-planner/views/RestDayView";
 
-export default async function DailyPlannerHome() {
+export default async function DailyPlannerHomePage() {
+  await cleanupGhostDays();
   await initializeDailyRecordAndHabits();
   const today = getCurrentDateIST();
 
@@ -83,7 +84,13 @@ export default async function DailyPlannerHome() {
   }
 
   if (status === "COMPLETED" || status === "ENDED_EARLY") {
-    return <ReviewView dailyRecord={dailyRecord} formattedDate={formatDisplayDateIST()}/>;
+    const timeEntries = await prisma.timeEntry.findMany({
+      where: { planItem: { date: today } },
+      orderBy: { startedAt: 'asc' },
+      include: { planItem: true } // Pulls in the task details
+    });
+
+    return <ReviewView dailyRecord={dailyRecord} timeEntries={timeEntries} formattedDate={formatDisplayDateIST()}/>;
   }
 
   return <div className="text-white p-10">Unknown State: {status}</div>;

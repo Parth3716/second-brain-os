@@ -20,6 +20,17 @@ export function convertToIST(dateTime:string) {
   return istTime;
 }
 
+export const formatTimeHM = (dateStr: string) => {
+    const date = new Date(dateStr);
+    let h = date.getUTCHours();
+    const m = date.getUTCMinutes();
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    h = h % 12;
+    h = h ? h : 12; // '0' should be '12'
+    const minStr = m < 10 ? '0' + m : m;
+    return `${h}:${minStr} ${ampm}`;
+  };
+
 export function formatDisplayDateIST() {
   return new Intl.DateTimeFormat('en-US', {
     weekday: 'long',

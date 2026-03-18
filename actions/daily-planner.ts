@@ -34,6 +34,90 @@ export async function initializeDailyRecordAndHabits() {
   }
 }
 
+export async function cleanupGhostDays() {
+  const currentDate = getCurrentDateIST();
+
+  const ghostRecords = await prisma.dailyRecord.findMany({
+    where: {
+      date: { lt: currentDate },
+      status: { in: ["PLANNING", "ACTIVE"] }
+    },
+    include: { items: true },
+    orderBy: { date: 'asc' }
+  });
+
+  if (ghostRecords.length === 0) return;
+
+  const tasksToRollover: any[] = [];
+
+  for (const record of ghostRecords) {
+    await prisma.timeEntry.deleteMany({
+      where: { 
+        planItem: { date: record.date },
+        endedAt: null
+      }
+    });
+
+    for (const item of record.items) {
+      if (item.status === "TODO") {
+        if (item.taskId) {
+          await prisma.dailyPlanItem.update({
+            where: { id: item.id },
+            data: { status: "PUSHED_TOMORROW" }
+          });
+
+          await prisma.task.update({
+            where: { id: item.taskId },
+            data: { status: "QUEUED" }
+          });
+
+          tasksToRollover.push({
+            taskId: item.taskId,
+            title: item.title,
+            estimatedCycles: item.estimatedCycles,
+            originalCycles: item.originalCycles
+          });
+        } 
+
+        else if (item.habitId) {
+          await prisma.dailyPlanItem.update({
+            where: { id: item.id },
+            data: { status: "SKIPPED" }
+          });
+        }
+      }
+    }
+
+    await prisma.dailyRecord.update({
+      where: { date: record.date },
+      data: { status: "GHOSTED" }
+    });
+  }
+
+  if (tasksToRollover.length > 0) {
+    let todaysRecord = await prisma.dailyRecord.findUnique({ where: { date: currentDate } });
+    if (!todaysRecord) {
+      todaysRecord = await prisma.dailyRecord.create({ data: { date: currentDate, status: "PLANNING" } });
+    }
+
+    const todaysItemsCount = await prisma.dailyPlanItem.count({ where: { date: currentDate } });
+
+    const newItems = tasksToRollover.map((task, index) => ({
+      date: currentDate,
+      taskId: task.taskId,
+      title: task.title,
+      estimatedCycles: task.estimatedCycles,
+      originalCycles: task.originalCycles,
+      orderIndex: todaysItemsCount + index,
+      status: "TODO"
+    }));
+
+    await prisma.dailyPlanItem.createMany({
+      data: newItems
+    });
+  }
+}
+
 export async function startDay() {
   const currentDate = getCurrentDateIST();
 
