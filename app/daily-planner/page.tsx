@@ -6,6 +6,8 @@ import HUDView from "@/components/daily-planner/views/HUDView"
 import ReviewView from "@/components/daily-planner/views/ReviewView"
 import RestDayView from "@/components/daily-planner/views/RestDayView";
 
+export const dynamic = 'force-dynamic';
+
 export default async function DailyPlannerHomePage() {
   await cleanupGhostDays();
   await initializeDailyRecordAndHabits();
