@@ -25,6 +25,7 @@ export async function initializeDailyRecordAndHabits() {
           habitId: habit.id,
           title: habit.title,
           estimatedCycles: habit.defaultCycles,
+          originalCycles: habit.defaultCycles,
           orderIndex: index,
           status: "TODO",
         })),
@@ -40,6 +41,31 @@ export async function startDay() {
     where: { date: currentDate },
     data: { status: "ACTIVE" }
   });
+
+  const firstTask = await prisma.dailyPlanItem.findFirst({
+    where: { date: currentDate, status: "TODO" },
+    orderBy: { orderIndex: "asc" }
+  });
+
+  if (firstTask) {
+    const existingRunningTimer = await prisma.timeEntry.findFirst({
+      where: { 
+        planItem: { date: currentDate },
+        endedAt: null 
+      }
+    });
+
+    if (!existingRunningTimer) {
+      await prisma.timeEntry.create({
+        data: {
+          planItemId: firstTask.id,
+          title: firstTask.title,
+          startedAt: getCurrentDateTimeIST(),
+          entryType: "LIVE_TRACKED",
+        }
+      });
+    }
+  }
 
   revalidatePath("/daily-planner");
 }
@@ -74,6 +100,71 @@ export async function endDay() {
     where: { date: currentDate },
     data: { status: "COMPLETED" }
   });
+
+  revalidatePath("/daily-planner");
+}
+
+export async function wrapUpDayEarly(formData: FormData) {
+  const currentDate = getCurrentDateIST();
+  const journalNote = formData.get("journalNote") as string;
+
+  const remainingItems = await prisma.dailyPlanItem.findMany({
+    where: { date: currentDate, status: "TODO" }
+  });
+
+  await prisma.dailyRecord.update({
+    where: { date: currentDate },
+    data: { 
+      status: "ENDED_EARLY",
+      notes: journalNote || null
+    }
+  });
+
+  for (const item of remainingItems) {
+    const action = formData.get(`action_${item.id}`);
+
+    if (action === "SKIP") {
+      await prisma.dailyPlanItem.update({
+        where: { id: item.id },
+        data: { status: "SKIPPED" }
+      });
+
+      if (item.taskId) {
+        await prisma.task.update({
+          where: { id: item.taskId },
+          data: { status: "BACKLOG" }
+        });
+      }
+    }
+    
+    else if (action === "PUSH") {
+      await prisma.dailyPlanItem.update({
+        where: { id: item.id },
+        data: { status: "PUSHED_TOMORROW" }
+      });
+
+      const nextDay = currentDate;
+      nextDay.setDate(currentDate.getDate() + 1);
+
+      let tomorrowRecord = await prisma.dailyRecord.findUnique({ where: { date: nextDay } });
+      if (!tomorrowRecord) {
+        tomorrowRecord = await prisma.dailyRecord.create({ data: { date: nextDay, status: "PLANNING" } });
+      }
+
+      const tomorrowItems = await prisma.dailyPlanItem.findMany({ where: { date: nextDay } });
+      await prisma.dailyPlanItem.create({
+        data: {
+          date: nextDay,
+          taskId: item.taskId,
+          habitId: item.habitId,
+          title: item.title,
+          estimatedCycles: item.estimatedCycles,
+          orderIndex: tomorrowItems.length,
+          status: "TODO"
+        }
+      });
+    }
+  }
 
   revalidatePath("/daily-planner");
 }
@@ -165,6 +256,7 @@ export async function addTaskToQueue(taskId: string, formData: FormData) {
         taskId: task.id,
         title: task.title,
         estimatedCycles: estimatedCycles,
+        originalCycles: estimatedCycles,
         orderIndex: existingItems.length,
       }
     }),
@@ -198,6 +290,7 @@ export async function addHabitToQueue(habitId: string) {
       habitId: habit.id,
       title: habit.title,
       estimatedCycles: habit.defaultCycles,
+      originalCycles: habit.defaultCycles,
       orderIndex: nextIndex,
       status: "TODO",
     }
@@ -226,6 +319,42 @@ export async function removeItemFromQueue(itemId: string) {
     });
   });
 
+  revalidatePath("/daily-planner");
+}
+
+export async function updateQueueItem(formData: FormData) {
+  const itemId = formData.get("itemId") as string;
+  const title = formData.get("title") as string;
+  const cycles = parseInt(formData.get("cycles") as string, 10);
+
+  if (!itemId || !title || isNaN(cycles)) return;
+
+  const item = await prisma.dailyPlanItem.findUnique({ where: { id: itemId } });
+  if (!item) return;
+
+  const transaction = [];
+
+  transaction.push(
+    prisma.dailyPlanItem.update({
+      where: { id: itemId },
+      data: { 
+        title: title.trim(), 
+        estimatedCycles: cycles,
+        originalCycles: cycles
+      }
+    }) as any
+  );
+
+  if (item.taskId) {
+    transaction.push(
+      prisma.task.update({
+        where: { id: item.taskId },
+        data: { title: title.trim() }
+      }) as any
+    );
+  }
+
+  await prisma.$transaction(transaction);
   revalidatePath("/daily-planner");
 }
 
@@ -263,6 +392,18 @@ export async function moveItemDownInQueue(itemId: string) {
     ]);
     revalidatePath("/daily-planner");
   }
+}
+
+export async function addCycleToItem(itemId: string) {
+  const item = await prisma.dailyPlanItem.findUnique({ where: { id: itemId } });
+  if (!item) return;
+
+  await prisma.dailyPlanItem.update({
+    where: { id: itemId },
+    data: { estimatedCycles: item.estimatedCycles + 1 }
+  });
+
+  revalidatePath("/daily-planner");
 }
 
 //-----------------------------------------------------------
@@ -371,46 +512,39 @@ export async function completeLiveTask(itemId: string, activeTimeEntryId?: strin
   revalidatePath("/daily-planner");
 }
 
-export async function skipLiveTask(itemId: string, durationSeconds: number) {
+export async function abandonLiveTask(itemId: string, action: "PUSH" | "SKIP") {
   const currentDate = getCurrentDateIST();
-  
   const item = await prisma.dailyPlanItem.findUnique({ where: { id: itemId } });
   if (!item) return;
 
-  const lastItem = await prisma.dailyPlanItem.findFirst({
-    where: { date: currentDate },
-    orderBy: { orderIndex: 'desc' }
-  });
-
-  const newIndex = lastItem ? lastItem.orderIndex + 1 : 99;
-
-  const transaction = [];
-
-  if (durationSeconds > 10) {
-    const endDateTime = getCurrentDateTimeIST()
-    const startDateTime = new Date(endDateTime.getTime() - durationSeconds * 1000);
-
-    transaction.push(
-      prisma.timeEntry.create({
-        data: {
-          planItemId: item.id,
-          title: `${item.title} (Partial)`,
-          startedAt: startDateTime,
-          endedAt: endDateTime,
-          durationSeconds: Math.round(durationSeconds),
-          entryType: "LIVE_TRACKED",
-        }
-      }) as any
-    );
+  if (action === "SKIP") {
+    await prisma.dailyPlanItem.update({ where: { id: item.id }, data: { status: "SKIPPED" } });
+    if (item.taskId) {
+      await prisma.task.update({ where: { id: item.taskId }, data: { status: "BACKLOG" } });
+    }
+  } 
+  else if (action === "PUSH") {
+    await prisma.dailyPlanItem.update({ where: { id: item.id }, data: { status: "PUSHED_TOMORROW" } });
+    
+    const nextDay = currentDate;
+    nextDay.setDate(currentDate.getDate() + 1);
+    
+    let tomorrowRecord = await prisma.dailyRecord.findUnique({ where: { date: nextDay } });
+    if (!tomorrowRecord) tomorrowRecord = await prisma.dailyRecord.create({ data: { date: nextDay, status: "PLANNING" } });
+    
+    const tomorrowItems = await prisma.dailyPlanItem.findMany({ where: { date: nextDay } });
+    await prisma.dailyPlanItem.create({
+      data: {
+        date: nextDay,
+        taskId: item.taskId,
+        habitId: item.habitId,
+        title: item.title,
+        estimatedCycles: item.estimatedCycles,
+        orderIndex: tomorrowItems.length,
+        status: "TODO"
+      }
+    });
   }
 
-  transaction.push(
-    prisma.dailyPlanItem.update({
-      where: { id: itemId },
-      data: { orderIndex: newIndex }
-    }) as any
-  );
-
-  await prisma.$transaction(transaction);
   revalidatePath("/daily-planner");
 }

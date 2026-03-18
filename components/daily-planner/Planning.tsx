@@ -144,7 +144,8 @@ export default async function Planning({ dailyRecord }: { dailyRecord: any }) {
                       </div>
                       <div className="flex-1">
                         <QueueItem 
-                          id={item.id} 
+                          id={item.id}
+                          taskId={item.taskId} 
                           title={item.title} 
                           estimatedCycles={item.estimatedCycles} 
                           isFirst={index === 0} 

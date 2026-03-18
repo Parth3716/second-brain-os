@@ -47,7 +47,7 @@ export default async function DailyPlannerHome() {
     )
   }
 
-  if (status === "COMPLETED" || status === "REST_DAY") {
+  if (status === "COMPLETED" || status === "REST_DAY" || status === "ENDED_EARLY") {
     return <Log dailyRecord={dailyRecord} />;
   }
 

@@ -40,6 +40,7 @@ model DailyPlanItem {
   title           String
   orderIndex      Int
   estimatedCycles Int
+  originalCycles  Int?
   status          String    @default("TODO")
   timeEntries     TimeEntry[]
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { startLiveTask, pauseLiveTask, completeLiveTask, skipLiveTask, endDay} from "../../actions/daily-planner"
+import { startLiveTask, pauseLiveTask, completeLiveTask, endDay, wrapUpDayEarly, abandonLiveTask, addCycleToItem} from "../../actions/daily-planner"
 import { getCurrentDateTimeIST } from "@/lib/helpers";
 
 // --- TESTING CONSTANT --- (Set to 45 * 60 for 45 minutes)
@@ -17,9 +17,11 @@ export default function HUDScreen({ dailyRecord, activeTimeEntry, pastDurationSe
   // --- STATE DECLARATIONS ---
   const [hudState, setHudState] = useState<"STANDBY" | "RUNNING" | "PAUSED" | "OVERTIME" | "BREAK">("RUNNING");
   const [displaySeconds, setDisplaySeconds] = useState(pastDurationSeconds);
-  const [sessionElapsed, setSessionElapsed] = useState(0); // Tracks current un-saved chunk
+  const [sessionElapsed, setSessionElapsed] = useState(0);
   const [breakElapsed, setBreakElapsed] = useState(0);
   const [showJunction, setShowJunction] = useState(false);
+  const [showEndDayModal, setShowEndDayModal] = useState(false);
+  const [showAbandonModal, setShowAbandonModal] = useState(false)
 
   const isRunning = !!activeTimeEntry;
   const expectedSeconds = currentTask ? currentTask.estimatedCycles * SECONDS_PER_CYCLE : 0;
@@ -79,12 +81,52 @@ export default function HUDScreen({ dailyRecord, activeTimeEntry, pastDurationSe
     }
   };
 
-  const handleComplete = async () => {
-    await completeLiveTask(currentTask.id, activeTimeEntry?.id);
-    setSessionElapsed(0);
-    setShowJunction(true);
+  const handleAddCycle = async () => {
+    if (hudState === "OVERTIME") {
+      setHudState("RUNNING");
+    }
+    await addCycleToItem(currentTask.id);
   };
 
+  const handleComplete = async () => {
+    setHudState("PAUSED");
+    await completeLiveTask(currentTask.id, activeTimeEntry?.id);
+    setSessionElapsed(0);
+
+    if (queue.length <= 1) {
+      await endDay(); 
+    } else {
+      setShowJunction(true);
+    }
+  };
+
+  const handleOpenEndDay = async () => {
+    if (activeTimeEntry) {
+      setHudState("PAUSED");
+      await pauseLiveTask(activeTimeEntry.id);
+      setSessionElapsed(0);
+    }
+    setShowEndDayModal(true);
+  }
+
+  const handleAbandonClick = async () => {
+    if (activeTimeEntry) {
+      setHudState("PAUSED");
+      await pauseLiveTask(activeTimeEntry.id);
+      setSessionElapsed(0);
+    }
+    setShowAbandonModal(true);
+  };
+
+  const executeAbandon = async (actionType: "PUSH" | "SKIP") => {
+    setShowAbandonModal(false);
+    await abandonLiveTask(currentTask.id, actionType);
+    if (queue.length <= 1) {
+      await endDay(); 
+    } else {
+      setHudState("STANDBY");
+    }
+  };
 
   // --- HELPERS ---
   const formatTime = (seconds: number) => {
@@ -116,6 +158,10 @@ export default function HUDScreen({ dailyRecord, activeTimeEntry, pastDurationSe
         <span className="text-sm font-bold tracking-widest text-slate-400 flex items-center gap-2">
           {hudState === "BREAK" ? "☕ BREAK TIME" : "🟢 WORKDAY ACTIVE"}
         </span>
+
+        <button onClick={handleOpenEndDay} className="text-xs font-bold tracking-widest text-red-400 hover:text-red-300 border border-red-900/30 bg-red-900/10 px-4 py-2 rounded transition-colors flex items-center gap-2">
+          🛑 END DAY
+        </button>
       </div>
 
       {/* --- BREAK MODE UI --- */}
@@ -139,61 +185,105 @@ export default function HUDScreen({ dailyRecord, activeTimeEntry, pastDurationSe
         <>
           <div className={`text-center space-y-2 mb-10 transition-opacity ${showJunction ? 'opacity-10' : 'opacity-100'}`}>
             <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-widest">
-              {!isRunning ? "READY" : "CURRENT FOCUS"}
+              {/* FIX: Strictly use hudState for the text */}
+              {hudState === "STANDBY" ? "READY FOR NEXT TASK" : "CURRENT FOCUS"}
             </h2>
             <h1 className="text-3xl font-bold text-white max-w-2xl truncate">≡ {currentTask?.title}</h1>
           </div>
 
-          {/* THE BIG CLOCK */}
+          {/* --- THE BIG CLOCK --- */}
           <div className={`relative flex items-center justify-center w-64 h-64 rounded-full border-4 mb-12 transition-all duration-500
             ${showJunction ? 'opacity-10 scale-95' : 'shadow-2xl'}
-            ${!isRunning ? "border-slate-800 shadow-none" : ""}
-            ${isRunning && !isOvertime ? "border-emerald-500 shadow-emerald-900/20" : ""}
-            ${isRunning && isOvertime ? "border-orange-500 shadow-orange-900/20" : ""}
+            ${hudState === "STANDBY" ? "border-slate-800 shadow-none" : ""}
+            ${(hudState === "RUNNING" && !isOvertime) ? "border-emerald-500 shadow-emerald-900/20" : ""}
+            ${(hudState === "RUNNING" && isOvertime) ? "border-orange-500 shadow-orange-900/20" : ""}
+            ${hudState === "PAUSED" ? "border-slate-600 opacity-50" : ""}
           `}>
             <div className="flex flex-col items-center">
               {isOvertime && <span className="text-orange-500 text-sm font-bold tracking-widest mb-1">+ OVERTIME</span>}
               <span className={`text-6xl font-light tracking-tight font-mono ${isOvertime ? "text-orange-400" : "text-white"}`}>
                 {formatTime(Math.max(0, clockValue))}
               </span>
-              {!isRunning && pastDurationSeconds > 0 && <span className="text-slate-400 text-sm tracking-widest mt-2 uppercase">Paused</span>}
+              {hudState === "PAUSED" && <span className="text-slate-400 text-sm tracking-widest mt-2 uppercase">Paused</span>}
             </div>
           </div>
 
-          {/* HUD CONTROLS */}
+          {/* --- HUD CONTROLS --- */}
           {!showJunction && (
             <div className="flex gap-4 mb-20 animate-in fade-in slide-in-from-bottom-4">
               
-              {!isRunning && (
-                <form action={handleStart}>
-                  <button type="submit" className="px-8 py-4 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold tracking-widest text-sm shadow-lg">
-                    ▶ START TIMER
+              {/* 1. STANDBY STATE: Only show the giant Start button */}
+              {hudState === "STANDBY" && (
+                <>
+                  <form action={async () => { setHudState("RUNNING"); await handleStart(); }}>
+                    <button type="submit" className="px-10 py-4 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold tracking-widest text-sm shadow-lg transition-colors">
+                      ▶ START TIMER
+                    </button>
+                  </form>
+                  <button onClick={handleAbandonClick} className="px-6 py-4 bg-slate-900 hover:bg-slate-800 text-slate-400 rounded-xl font-bold tracking-widest text-sm border border-slate-800 transition-colors">
+                      ⏭ SKIP
                   </button>
-                </form>
+                </>
               )}
 
-              {isRunning && (
+              {/* 2. RUNNING STATE: Show Complete, Pause, and Skip */}
+              {(hudState === "RUNNING" || hudState === "OVERTIME") && (
                 <>
                   <form action={handleComplete}>
-                    <button type="submit" className="px-8 py-4 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-bold tracking-widest text-sm shadow-lg">
+                    <button type="submit" className="px-8 py-4 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-bold tracking-widest text-sm shadow-lg transition-colors">
                       ✔ COMPLETE
                     </button>
                   </form>
                   <form action={handlePause}>
-                    <button type="submit" className="px-6 py-4 bg-slate-800 hover:bg-slate-700 text-white rounded-xl font-bold tracking-widest text-sm border border-slate-700">
+                    <button type="submit" className="px-6 py-4 bg-slate-800 hover:bg-slate-700 text-white rounded-xl font-bold tracking-widest text-sm border border-slate-700 transition-colors">
                       ⏸ PAUSE
                     </button>
                   </form>
+                  
+                  {/* NEW: ONLY APPEARS IF TIMER IS PAST ESTIMATED TIME */}
+                  {isOvertime && (
+                    <form action={handleAddCycle}>
+                      <button type="submit" className="px-6 py-4 bg-orange-500/10 hover:bg-orange-500/20 text-orange-400 border border-orange-500/30 rounded-xl font-bold tracking-widest text-sm transition-colors">
+                        +1 CYCLE
+                      </button>
+                    </form>
+                  )}
+
+                  <button onClick={handleAbandonClick} className="px-6 py-4 bg-slate-900 hover:bg-slate-800 text-slate-400 rounded-xl font-bold tracking-widest text-sm border border-slate-800 transition-colors">
+                    ⏭ SKIP
+                  </button>
                 </>
               )}
 
-              {!isRunning && pastDurationSeconds > 0 && (
-                 <form action={handleComplete}>
-                   <button type="submit" className="px-6 py-4 bg-slate-800 hover:bg-slate-700 text-white rounded-xl font-bold tracking-widest text-sm border border-slate-700">
-                     🏁 WRAP UP EARLY
+              {/* 3. PAUSED STATE: Show Resume, Wrap Up, and Skip */}
+              {hudState === "PAUSED" && (
+                 <>
+                   <form action={async () => { setHudState(isOvertime ? "OVERTIME" : "RUNNING"); await handleStart(); }}>
+                     <button type="submit" className="px-8 py-4 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold tracking-widest text-sm shadow-lg transition-colors">
+                       ▶ RESUME
+                     </button>
+                   </form>
+                   <form action={handleComplete}>
+                     <button type="submit" className="px-6 py-4 bg-slate-800 hover:bg-slate-700 text-white rounded-xl font-bold tracking-widest text-sm border border-slate-700 transition-colors">
+                       🏁 WRAP UP
+                     </button>
+                   </form>
+                   
+                   {/* NEW: ALLOW ADDING CYCLES EVEN WHILE PAUSED IN OVERTIME */}
+                   {isOvertime && (
+                     <form action={handleAddCycle}>
+                       <button type="submit" className="px-6 py-4 bg-orange-500/10 hover:bg-orange-500/20 text-orange-400 border border-orange-500/30 rounded-xl font-bold tracking-widest text-sm transition-colors">
+                         +1 CYCLE
+                       </button>
+                     </form>
+                   )}
+
+                   <button onClick={handleAbandonClick} className="px-6 py-4 bg-slate-900 hover:bg-slate-800 text-slate-400 rounded-xl font-bold tracking-widest text-sm border border-slate-800 transition-colors">
+                     ⏭ SKIP
                    </button>
-                 </form>
+                 </>
               )}
+
             </div>
           )}
         </>
@@ -208,14 +298,6 @@ export default function HUDScreen({ dailyRecord, activeTimeEntry, pastDurationSe
               {nextTaskInBar ? nextTaskInBar.title : "Nothing else scheduled! 🎉"}
             </span>
           </div>
-          
-          {nextTaskInBar && (
-            <form action={async () => { await skipLiveTask(currentTask.id, sessionElapsed); }}>
-              <button type="submit" title="Send to bottom of queue" className="text-xs text-slate-400 hover:text-white flex items-center gap-1 bg-slate-900 px-3 py-2 rounded-lg border border-slate-800 transition-colors">
-                {sessionElapsed > 10 ? "⏭ Save & Skip" : "⏭ Skip"}
-              </button>
-            </form>
-          )}
         </div>
       )}
 
@@ -232,14 +314,12 @@ export default function HUDScreen({ dailyRecord, activeTimeEntry, pastDurationSe
               {currentTask ? (
                 <div className="flex items-center justify-between bg-slate-900 border border-slate-700 p-4 rounded-xl">
                   <span className="font-medium text-slate-200 truncate">≡ {currentTask.title}</span>
-                  <form action={async () => { await skipLiveTask(currentTask.id, 0); }}>
-                    <button type="submit" onClick={() => setShowJunction(false)} className="text-xs text-slate-400 hover:text-white bg-slate-800 px-3 py-1.5 rounded">⏭ Skip</button>
-                  </form>
                 </div>
               ) : (
                 <div className="text-emerald-400 text-center text-sm font-medium">Queue is empty!</div>
               )}
             </div>
+
             <div className="p-6 space-y-3">
               {currentTask && (
                 <button onClick={() => { setShowJunction(false); setHudState("RUNNING"); handleStart(); }} className="w-full py-4 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold text-sm shadow-lg">
@@ -257,6 +337,109 @@ export default function HUDScreen({ dailyRecord, activeTimeEntry, pastDurationSe
         </div>
       )}
 
+      {showEndDayModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            
+            <div className="flex justify-between items-center bg-slate-800/50 p-5 border-b border-slate-700">
+              <h3 className="font-bold text-white flex items-center gap-2 text-lg">
+                <span>🛑</span> Wrap Up Day Early
+              </h3>
+              <button onClick={() => setShowEndDayModal(false)} className="text-slate-400 hover:text-white text-xl">✖</button>
+            </div>
+
+            <form action={wrapUpDayEarly}>
+              <div className="p-6 space-y-6">
+                
+                <div className="text-slate-300 text-sm">
+                  You have <span className="font-bold text-white">{queue.length} items</span> left in your queue. Let's clean them up:
+                </div>
+
+                {/* List remaining tasks with dropdowns */}
+                <div className="space-y-3 max-h-[30vh] overflow-y-auto pr-2">
+                  {queue.map((item:any) => (
+                    <div key={item.id} className="flex items-center justify-between bg-slate-950 border border-slate-800 p-3 rounded-lg">
+                      <span className="text-sm font-medium text-slate-300 truncate pr-4">
+                        ≡ {item.title}
+                      </span>
+                      
+                      <select 
+                        name={`action_${item.id}`} 
+                        className="bg-slate-800 border border-slate-700 text-slate-300 text-xs rounded px-2 py-1.5 focus:outline-none focus:border-blue-500 cursor-pointer"
+                        defaultValue={item.habitId ? "SKIP" : "PUSH"} 
+                      >
+                        <option value="PUSH">📅 Push to Tomorrow</option>
+                        {/* Simplified the wording here! */}
+                        <option value="SKIP">🗑️ Skip / Return to Backlog</option>
+                      </select>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Journal Note */}
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-widest mb-2">
+                    Daily Journal (Optional)
+                  </label>
+                  <textarea 
+                    name="journalNote"
+                    placeholder="Brain is fried, stopping early to go see a movie." 
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-300 text-sm focus:border-blue-500 focus:outline-none min-h-[80px]"
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-3 p-5 border-t border-slate-800 bg-slate-900/50">
+                <button type="button" onClick={() => setShowEndDayModal(false)} className="px-5 py-2.5 text-sm font-medium text-slate-400 hover:text-white transition-colors">
+                  Cancel
+                </button>
+                <button type="submit" className="px-6 py-2.5 text-sm font-bold bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-colors shadow-lg">
+                  ✔ Finalize & End Day
+                </button>
+              </div>
+            </form>
+
+          </div>
+        </div>
+      )}
+
+      {showAbandonModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            
+            <div className="p-6 border-b border-slate-800 text-center">
+              <h3 className="font-bold text-white text-lg mb-2">Skip this task?</h3>
+              <p className="text-sm text-slate-400">
+                Time spent so far has been saved. What do you want to do with the remainder of this task?
+              </p>
+            </div>
+
+            <div className="p-6 flex flex-col gap-3">
+              <button 
+                onClick={() => executeAbandon("PUSH")} 
+                className="w-full py-4 bg-blue-600/10 hover:bg-blue-600/20 text-blue-400 border border-blue-500/20 rounded-xl font-bold text-sm transition-all"
+              >
+                📅 PUSH TO TOMORROW
+              </button>
+              
+              <button 
+                onClick={() => executeAbandon("SKIP")} 
+                className="w-full py-4 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold text-sm transition-all border border-slate-700"
+              >
+                🗑️ SKIP / RETURN TO BACKLOG
+              </button>
+              
+              <button 
+                onClick={() => setShowAbandonModal(false)} 
+                className="w-full py-3 mt-2 text-slate-500 hover:text-white font-medium text-sm transition-all"
+              >
+                Cancel & Keep Task
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
     </main>
   );
 }
