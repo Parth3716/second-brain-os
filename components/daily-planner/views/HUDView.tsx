@@ -1,14 +1,14 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { startLiveTask, pauseLiveTask, completeLiveTask, endDay, wrapUpDayEarly, abandonLiveTask, addCycleToItem} from "../../actions/daily-planner"
+import { startLiveTask, pauseLiveTask, completeLiveTask, endDay, wrapUpDayEarly, abandonLiveTask, addCycleToItem} from "@/actions/daily-planner"
 import { getCurrentDateTimeIST } from "@/lib/helpers";
 
 // --- TESTING CONSTANT --- (Set to 45 * 60 for 45 minutes)
 const SECONDS_PER_CYCLE = 60; 
 const BREAK_DURATION = 5 * 60; // 5 minutes
 
-export default function HUDScreen({ dailyRecord, activeTimeEntry, pastDurationSeconds }: { dailyRecord: any, activeTimeEntry: any, pastDurationSeconds: number }) {
+export default function HUDView({ dailyRecord, activeTimeEntry, pastDurationSeconds }: { dailyRecord: any, activeTimeEntry: any, pastDurationSeconds: number }) {
   // 1. Get the queue and the current task
   const queue = (dailyRecord.items || []).filter((item: any) => item.status === "TODO");
   const currentTask = queue[0];

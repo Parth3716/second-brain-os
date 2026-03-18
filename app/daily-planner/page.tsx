@@ -1,9 +1,10 @@
-import {prisma} from "../../lib/prisma_client"
-import { initializeDailyRecordAndHabits } from "../../actions/daily-planner"
-import { getCurrentDateIST } from "../../lib/helpers"
-import Planning from "../../components/daily-planner/Planning"
-import HUD from "../../components/daily-planner/HUD"
-import Log from "../../components/daily-planner/Log"
+import {prisma} from "@/lib/prisma_client"
+import { initializeDailyRecordAndHabits } from "@/actions/daily-planner"
+import { getCurrentDateIST, formatDisplayDateIST } from "@/lib/helpers"
+import PlanningView from "@/components/daily-planner/views/PlanningView"
+import HUDView from "@/components/daily-planner/views/HUDView"
+import ReviewView from "@/components/daily-planner/views/ReviewView"
+import RestDayView from "@/components/daily-planner/views/RestDayView";
 
 export default async function DailyPlannerHome() {
   await initializeDailyRecordAndHabits();
@@ -17,7 +18,22 @@ export default async function DailyPlannerHome() {
   const status = dailyRecord?.status;
 
   if (status === "PLANNING") {
-    return <Planning dailyRecord={dailyRecord} />;
+    // Fetch the backlog tasks and routines right here in the Traffic Cop!
+    const backlogTasks = await prisma.task.findMany({ where: { status: "BACKLOG" }, orderBy: { title: "asc" } });
+    const routines = await prisma.habit.findMany({ orderBy: { title: "asc" } });
+    
+    const todaysQueue = (dailyRecord?.items || []).filter((item: any) => item.status === "TODO");
+    const totalCycles = todaysQueue.reduce((sum: number, item: any) => sum + item.estimatedCycles, 0);
+
+    return (
+        <PlanningView 
+          backlogTasks={backlogTasks} 
+          routines={routines} 
+          todaysQueue={todaysQueue} 
+          totalCycles={totalCycles}
+          formattedDate={formatDisplayDateIST()}
+        />
+    );
   }
 
   if (status === "ACTIVE") {
@@ -38,8 +54,9 @@ export default async function DailyPlannerHome() {
       });
       pastDurationSeconds = pastEntries.reduce((sum, e) => sum + (e.durationSeconds || 0), 0);
     }
+
     return (
-      <HUD
+      <HUDView
         dailyRecord={dailyRecord} 
         activeTimeEntry={activeTimeEntry} 
         pastDurationSeconds={pastDurationSeconds} 
@@ -47,8 +64,12 @@ export default async function DailyPlannerHome() {
     )
   }
 
-  if (status === "COMPLETED" || status === "REST_DAY" || status === "ENDED_EARLY") {
-    return <Log dailyRecord={dailyRecord} />;
+  if (status === "REST_DAY") {
+    return <RestDayView formattedDate={formatDisplayDateIST()} />;
+  }
+
+  if (status === "COMPLETED" || status === "ENDED_EARLY") {
+    return <ReviewView dailyRecord={dailyRecord} formattedDate={formatDisplayDateIST()}/>;
   }
 
   return <div className="text-white p-10">Unknown State: {status}</div>;

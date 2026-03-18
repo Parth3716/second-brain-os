@@ -1,5 +1,5 @@
 "use server";
-import { prisma } from "../lib/prisma_client";
+import { prisma } from "@/lib/prisma_client"
 import { revalidatePath } from "next/cache";
 import { getCurrentDateIST, getCurrentDateTimeIST, convertToIST } from "@/lib/helpers";
 
@@ -174,17 +174,41 @@ export async function wrapUpDayEarly(formData: FormData) {
 //-----------------------------------------------------------
 export async function addTaskToBacklog(formData: FormData) {
   const title = formData.get("title") as string;
+  const scheduledDateStr = formData.get("scheduledDate") as string;
   
   if (!title || title.trim() === "") return;
 
-  await prisma.task.create({
+  const task = await prisma.task.create({
     data: {
       title: title.trim(),
-      status: "BACKLOG", 
+      status: scheduledDateStr ? "QUEUED" : "BACKLOG", 
     },
   });
 
-  revalidatePath("/daily-planner/backlog");
+  if (scheduledDateStr) {
+    const scheduledDate = new Date(`${scheduledDateStr}T00:00:00.000Z`);
+    let futureRecord = await prisma.dailyRecord.findUnique({ where: { date: scheduledDate } });
+    if (!futureRecord) {
+      futureRecord = await prisma.dailyRecord.create({ data: { date: scheduledDate, status: "PLANNING" } });
+    }
+
+    const futureItems = await prisma.dailyPlanItem.findMany({ where: { date: scheduledDate } });
+
+    await prisma.dailyPlanItem.create({
+      data: {
+        date: scheduledDate,
+        taskId: task.id,
+        title: task.title,
+        estimatedCycles: 1,
+        originalCycles: 1,
+        orderIndex: futureItems.length,
+        status: "TODO",
+      }
+    });
+  }
+
+  revalidatePath("/daily-planner/manage");
+  revalidatePath("/daily-planner");
 }
 
 export async function deleteTaskFromBacklog(id: string) {
@@ -246,9 +270,11 @@ export async function addTaskToQueue(taskId: string, formData: FormData) {
 
   let dailyRecord = await prisma.dailyRecord.findUnique({ where: { date: currentDate } });
   if (!dailyRecord) dailyRecord = await prisma.dailyRecord.create({ data: { date: currentDate } });
-
-  const existingItems = await prisma.dailyPlanItem.findMany({ where: { date: currentDate } });
   
+  const activeCount = await prisma.dailyPlanItem.count({ 
+    where: { date: currentDate, status: "TODO" } 
+  });
+
   await prisma.$transaction([
     prisma.dailyPlanItem.create({
       data: {
@@ -257,7 +283,7 @@ export async function addTaskToQueue(taskId: string, formData: FormData) {
         title: task.title,
         estimatedCycles: estimatedCycles,
         originalCycles: estimatedCycles,
-        orderIndex: existingItems.length,
+        orderIndex: activeCount,
       }
     }),
 
@@ -281,8 +307,9 @@ export async function addHabitToQueue(habitId: string) {
     dailyRecord = await prisma.dailyRecord.create({ data: { date: currentDate, status: "ACTIVE" } });
   }
 
-  const existingItems = await prisma.dailyPlanItem.findMany({ where: { date: currentDate } });
-  const nextIndex = existingItems.length;
+  const activeCount = await prisma.dailyPlanItem.count({ 
+    where: { date: currentDate, status: "TODO" } 
+  });
 
   await prisma.dailyPlanItem.create({
     data: {
@@ -291,7 +318,7 @@ export async function addHabitToQueue(habitId: string) {
       title: habit.title,
       estimatedCycles: habit.defaultCycles,
       originalCycles: habit.defaultCycles,
-      orderIndex: nextIndex,
+      orderIndex: activeCount,
       status: "TODO",
     }
   });
@@ -319,6 +346,7 @@ export async function removeItemFromQueue(itemId: string) {
     });
   });
 
+  await normalizeQueueOrder(queuedItem.date);
   revalidatePath("/daily-planner");
 }
 
@@ -406,6 +434,22 @@ export async function addCycleToItem(itemId: string) {
   revalidatePath("/daily-planner");
 }
 
+async function normalizeQueueOrder(date: Date) {
+  const activeItems = await prisma.dailyPlanItem.findMany({
+    where: { date: date, status: "TODO" },
+    orderBy: { orderIndex: "asc" }
+  });
+
+  const transactions = activeItems.map((item, index) => 
+    prisma.dailyPlanItem.update({
+      where: { id: item.id },
+      data: { orderIndex: index }
+    })
+  );
+
+  await prisma.$transaction(transactions);
+}
+
 //-----------------------------------------------------------
 //---------------------TIME ENTRY----------------------------
 //-----------------------------------------------------------
@@ -446,6 +490,8 @@ export async function logPastEntry(formData: FormData) {
       data: { status: "COMPLETED" }
     })
   ]);
+
+  await normalizeQueueOrder(planItem.date);
 
   revalidatePath("/daily-planner");
 }
@@ -509,6 +555,7 @@ export async function completeLiveTask(itemId: string, activeTimeEntryId?: strin
   }
 
   await prisma.$transaction(transaction);
+  await normalizeQueueOrder(item.date);
   revalidatePath("/daily-planner");
 }
 

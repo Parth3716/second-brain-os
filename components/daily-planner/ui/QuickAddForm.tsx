@@ -2,7 +2,7 @@
 
 import { useRef } from "react";
 import { useFormStatus } from "react-dom";
-import { addTaskToBacklog } from "../../actions/daily-planner";
+import { addTaskToBacklog } from "@/actions/daily-planner"
 
 function SubmitButton() {
   const { pending } = useFormStatus();

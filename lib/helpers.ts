@@ -19,3 +19,11 @@ export function convertToIST(dateTime:string) {
   const istTime = new Date(now.getTime() + istOffset);
   return istTime;
 }
+
+export function formatDisplayDateIST() {
+  return new Intl.DateTimeFormat('en-US', {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+  }).format(new Date());
+}
