@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Plus, Trash2, ArrowLeft, Settings2, CheckCircle2, Target, CalendarDays, Loader2, Calendar } from "lucide-react";
 import Link from "next/link";
 import { addTaskToBacklog, deleteTaskFromBacklog, addHabitToBacklog, deleteHabitFromBacklog } from "@/actions/daily-planner"
+import { formatShortDisplayDateIST } from "@/lib/helpers";
 
 const DAYS = [
   { value: 1, label: "M" }, { value: 2, label: "T" }, { value: 3, label: "W" },
@@ -150,6 +151,11 @@ export default function ManageView({ initialTasks, initialHabits }: { initialTas
                     <div className="flex items-center gap-4">
                       <CheckCircle2 className="w-6 h-6 text-slate-600 flex-shrink-0 group-hover:text-indigo-400 transition-colors" />
                       <span className="text-slate-200 font-medium text-lg truncate">{task.title}</span>
+                      {task.dailyItems && task.dailyItems.length > 0 && (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-mono font-bold text-indigo-400 bg-indigo-500/10 border border-indigo-500/20 px-2 py-0.5 rounded-full whitespace-nowrap w-max">
+                          📅 {formatShortDisplayDateIST(task.dailyItems[0].date)}
+                        </span>
+                      )}
                     </div>
                   </div>
                   

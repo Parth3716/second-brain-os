@@ -27,3 +27,7 @@ export function formatDisplayDateIST() {
     day: 'numeric',
   }).format(new Date());
 }
+
+export function formatShortDisplayDateIST(dateString: string | Date) {
+  return new Date(dateString).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}

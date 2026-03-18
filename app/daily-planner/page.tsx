@@ -18,10 +18,24 @@ export default async function DailyPlannerHome() {
   const status = dailyRecord?.status;
 
   if (status === "PLANNING") {
-    // Fetch the backlog tasks and routines right here in the Traffic Cop!
-    const backlogTasks = await prisma.task.findMany({ where: { status: "BACKLOG" }, orderBy: { title: "asc" } });
+    const backlogTasks = await prisma.task.findMany({
+      where: {
+        status: { in: ["BACKLOG", "QUEUED"] },
+        dailyItems: {
+          none: { date: today, status: "TODO" }
+        }
+      },
+      include: {
+        dailyItems: {
+          where: { status: "TODO", date: { gt: today } },
+          orderBy: { date: 'asc' },
+          take: 1
+        }
+      },
+      orderBy: { title: "asc" }
+    });
     const routines = await prisma.habit.findMany({ orderBy: { title: "asc" } });
-    
+
     const todaysQueue = (dailyRecord?.items || []).filter((item: any) => item.status === "TODO");
     const totalCycles = todaysQueue.reduce((sum: number, item: any) => sum + item.estimatedCycles, 0);
 

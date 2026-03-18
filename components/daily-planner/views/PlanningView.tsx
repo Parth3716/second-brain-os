@@ -6,6 +6,7 @@ import { Settings2, Play, CalendarOff, ChevronDown, CalendarDays, Target, Plus, 
 import Link from "next/link";
 import QueueItem from "@/components/daily-planner/ui/QueueItem";
 import { addHabitToQueue, addTaskToQueue, startDay, takeDayOff } from "@/actions/daily-planner"
+import { formatShortDisplayDateIST } from "@/lib/helpers";
 
 export default function PlanningView({ backlogTasks, routines, todaysQueue, totalCycles, formattedDate }: any) {
   const [isHabitsOpen, setIsHabitsOpen] = useState(true);
@@ -117,6 +118,11 @@ export default function PlanningView({ backlogTasks, routines, todaysQueue, tota
                           <span className="truncate pr-2 flex items-center gap-2 font-medium">
                             <GripVertical className="w-4 h-4 text-slate-600 flex-shrink-0" />
                             <span className="truncate">{task.title}</span>
+                            {task.dailyItems && task.dailyItems.length > 0 && (
+                              <span className="hidden sm:inline-flex items-center gap-1 text-[9px] font-mono font-bold text-indigo-400 bg-indigo-500/10 border border-indigo-500/20 px-1.5 py-0.5 rounded-full whitespace-nowrap ml-1">
+                                📅 {formatShortDisplayDateIST(task.dailyItems[0].date)}
+                              </span>
+                            )}
                           </span>
                           
                           <form action={(formData) => handleForceTask(task.id, formData)} className="flex items-center gap-1.5 flex-shrink-0">

@@ -1,13 +1,28 @@
 import { prisma } from "@/lib/prisma_client"
 import ManageView from "@/components/daily-planner/views/ManageView"
+import { getCurrentDateIST } from "@/lib/helpers";
 
 export const dynamic = "force-dynamic";
 
 export default async function ManageUniversePage() {
-  // Fetch data on the server
-  const backlogTasks = await prisma.task.findMany({ 
-    where: { status: "BACKLOG" }, 
-    orderBy: { title: "asc" } 
+  const currentDate = getCurrentDateIST();
+
+  const backlogTasks = await prisma.task.findMany({
+    where: {
+      status: { in: ["BACKLOG", "QUEUED"] },
+
+      dailyItems: {
+        none: { date: currentDate, status: "TODO" }
+      }
+    },
+    include: {
+      dailyItems: {
+        where: { status: "TODO", date: { gt: currentDate } },
+        orderBy: { date: 'asc' },
+        take: 1
+      }
+    },
+    orderBy: { title: "asc" }
   });
   
   const habits = await prisma.habit.findMany({ 
