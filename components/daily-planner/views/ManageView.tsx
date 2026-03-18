@@ -72,7 +72,7 @@ export default function ManageView({ initialTasks, initialHabits }: { initialTas
       <header className="flex justify-between items-end border-b border-white/10 pb-6">
         <div className="space-y-1">
           <Link href="/daily-planner" className="text-sm font-medium text-slate-400 hover:text-white transition-colors flex items-center gap-2 mb-4 group">
-            <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" /> Return to Today's Plan
+            <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" /> Return to Today
           </Link>
           <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-white to-slate-400 flex items-center gap-4">
             <Settings2 className="w-10 h-10 text-white" /> Manage Backlog

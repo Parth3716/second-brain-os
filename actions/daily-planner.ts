@@ -679,3 +679,104 @@ export async function abandonLiveTask(itemId: string, action: "PUSH" | "SKIP") {
 
   revalidatePath("/daily-planner");
 }
+
+export async function updateTimeEntry(id: string, formData: FormData) {
+  const currentDate = getCurrentDateIST()
+  const startTime = formData.get("startTime") as string;
+  const endTime = formData.get("endTime") as string;
+  const notes = formData.get("notes") as string;
+
+  const entry = await prisma.timeEntry.findUnique({ where: { id }, include: { planItem: true } });
+  if (!entry || !entry.planItem) return;
+
+  const currentDateStr = currentDate.toISOString().split('T')[0];
+  const startDateTime = convertToIST(`${currentDateStr}T${startTime}:00`);
+  const endDateTime = convertToIST(`${currentDateStr}T${endTime}:00`);
+  
+  const diffMs = endDateTime.getTime() - startDateTime.getTime();
+  const durationSeconds = Math.round(diffMs / 1000);
+
+  if (durationSeconds <= 0) return { error: "End time must be after start time." };
+
+  await prisma.timeEntry.update({
+    where: { id },
+    data: { startedAt: startDateTime, endedAt: endDateTime, durationSeconds, notes: notes || null }
+  });
+  revalidatePath("/daily-planner");
+}
+
+export async function addAdhocLog(formData: FormData) {
+  const currentDate = getCurrentDateIST()
+  const title = formData.get("title") as string;
+  const startTime = formData.get("startTime") as string;
+  const endTime = formData.get("endTime") as string;
+  const notes = formData.get("notes") as string;
+
+  if (!title || !startTime || !endTime) return;
+
+  const currentDateStr = currentDate.toISOString().split('T')[0];
+  const startDateTime = convertToIST(`${currentDateStr}T${startTime}:00`);
+  const endDateTime = convertToIST(`${currentDateStr}T${endTime}:00`);
+
+  const diffMs = endDateTime.getTime() - startDateTime.getTime();
+  const durationSeconds = Math.round(diffMs / 1000);
+
+  if (durationSeconds <= 0) return { error: "End time must be after start time." };
+
+  await prisma.timeEntry.create({
+    data: {
+      planItemId: null,
+      title: title,
+      startedAt: startDateTime,
+      endedAt: endDateTime,
+      durationSeconds: durationSeconds,
+      entryType: "MANUAL",
+      notes: notes || null,
+    }
+  });
+
+  revalidatePath("/daily-planner");
+}
+
+// actions/daily-planner.ts
+
+export async function deleteTimeEntry(id: string) {
+  const entry = await prisma.timeEntry.findUnique({ 
+    where: { id },
+    include: { planItem: true }
+  });
+  
+  if (!entry) return;
+
+  const planItemId = entry.planItemId;
+  const planItem = entry.planItem;
+
+  await prisma.timeEntry.delete({ where: { id } });
+
+  if (planItemId && planItem) {
+    const remainingEntriesCount = await prisma.timeEntry.count({
+      where: { planItemId }
+    });
+
+    if (remainingEntriesCount === 0) {
+      if (!planItem.taskId && !planItem.habitId) {
+        await prisma.dailyPlanItem.delete({ where: { id: planItemId } });
+      } 
+      else {
+        await prisma.dailyPlanItem.update({
+          where: { id: planItemId },
+          data: { status: "SKIPPED" }
+        });
+
+        if (planItem.taskId) {
+          await prisma.task.update({
+            where: { id: planItem.taskId },
+            data: { status: "BACKLOG" }
+          });
+        }
+      }
+    }
+  }
+
+  revalidatePath("/daily-planner");
+}
