@@ -2,37 +2,85 @@
 
 import { useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, Trash2, ArrowLeft, Settings2, CheckCircle2, Target, CalendarDays, Loader2, Calendar } from "lucide-react";
+import {
+  Plus,
+  Trash2,
+  ArrowLeft,
+  Settings2,
+  CheckCircle2,
+  Target,
+  CalendarDays,
+  Loader2,
+  Calendar,
+} from "lucide-react";
 import Link from "next/link";
-import { addTaskToBacklog, deleteTaskFromBacklog, addHabitToBacklog, deleteHabitFromBacklog } from "@/actions/daily-planner"
+import {
+  addTaskToBacklog,
+  deleteTaskFromBacklog,
+  addHabitToBacklog,
+  deleteHabitFromBacklog,
+} from "@/actions/daily-planner";
 import { formatShortDisplayDateIST } from "@/lib/helpers";
+import { useToast } from "@/components/ui/Toast";
+import type { Task, Habit } from "@/types/daily-planner";
 
 const DAYS = [
-  { value: 1, label: "M" }, { value: 2, label: "T" }, { value: 3, label: "W" },
-  { value: 4, label: "T" }, { value: 5, label: "F" }, { value: 6, label: "S" }, { value: 0, label: "S" },
+  { value: 1, label: "M" },
+  { value: 2, label: "T" },
+  { value: 3, label: "W" },
+  { value: 4, label: "T" },
+  { value: 5, label: "F" },
+  { value: 6, label: "S" },
+  { value: 0, label: "S" },
 ];
 
 function formatDays(daysArray: number[]) {
   if (daysArray.length === 7) return "Every day";
-  if (daysArray.length === 5 && !daysArray.includes(0) && !daysArray.includes(6)) return "Weekdays";
-  const dayMap: Record<number, string> = { 1: "Mon", 2: "Tue", 3: "Wed", 4: "Thu", 5: "Fri", 6: "Sat", 0: "Sun" };
-  return [...daysArray].sort((a, b) => (a === 0 ? 7 : a) - (b === 0 ? 7 : b)).map(d => dayMap[d]).join(", ");
+  if (
+    daysArray.length === 5 &&
+    !daysArray.includes(0) &&
+    !daysArray.includes(6)
+  )
+    return "Weekdays";
+  const dayMap: Record<number, string> = {
+    1: "Mon",
+    2: "Tue",
+    3: "Wed",
+    4: "Thu",
+    5: "Fri",
+    6: "Sat",
+    0: "Sun",
+  };
+  return [...daysArray]
+    .sort((a, b) => (a === 0 ? 7 : a) - (b === 0 ? 7 : b))
+    .map((d) => dayMap[d])
+    .join(", ");
 }
 
-export default function ManageView({ initialTasks, initialHabits }: { initialTasks: any[], initialHabits: any[] }) {
+export default function ManageView({
+  initialTasks,
+  initialHabits,
+}: {
+  initialTasks: Task[];
+  initialHabits: Habit[];
+}) {
   const taskFormRef = useRef<HTMLFormElement>(null);
   const habitFormRef = useRef<HTMLFormElement>(null);
-  
+  const { showToast } = useToast();
+
   const [isTaskAdding, setIsTaskAdding] = useState(false);
   const [isHabitAdding, setIsHabitAdding] = useState(false);
   const [deletingIds, setDeletingIds] = useState<string[]>([]);
-  
+
   // NEW: State to manage the custom date picker UI
   const [scheduleDate, setScheduleDate] = useState("");
 
   const handleAddTask = async (formData: FormData) => {
     setIsTaskAdding(true);
-    await addTaskToBacklog(formData);
+    const result = await addTaskToBacklog(formData);
+    if (!result.success) {
+      showToast(result.error);
+    }
     taskFormRef.current?.reset();
     setScheduleDate(""); // Reset the date picker visually!
     setIsTaskAdding(false);
@@ -40,39 +88,53 @@ export default function ManageView({ initialTasks, initialHabits }: { initialTas
 
   const handleAddHabit = async (formData: FormData) => {
     setIsHabitAdding(true);
-    await addHabitToBacklog(formData);
+    const result = await addHabitToBacklog(formData);
+    if (!result.success) {
+      showToast(result.error);
+    }
     habitFormRef.current?.reset();
     setIsHabitAdding(false);
   };
 
   const handleDeleteTask = async (id: string) => {
-    setDeletingIds(prev => [...prev, id]);
-    await deleteTaskFromBacklog(id);
-    setDeletingIds(prev => prev.filter(deleteId => deleteId !== id));
+    setDeletingIds((prev) => [...prev, id]);
+    const result = await deleteTaskFromBacklog(id);
+    if (!result.success) {
+      showToast(result.error);
+    }
+    setDeletingIds((prev) => prev.filter((deleteId) => deleteId !== id));
   };
 
   const handleDeleteHabit = async (id: string) => {
-    setDeletingIds(prev => [...prev, id]);
-    await deleteHabitFromBacklog(id);
-    setDeletingIds(prev => prev.filter(deleteId => deleteId !== id));
+    setDeletingIds((prev) => [...prev, id]);
+    const result = await deleteHabitFromBacklog(id);
+    if (!result.success) {
+      showToast(result.error);
+    }
+    setDeletingIds((prev) => prev.filter((deleteId) => deleteId !== id));
   };
 
-  // NEW: Helper to format the selected date beautifully
   const getDisplayDate = (dateStr: string) => {
     if (!dateStr) return "Schedule";
-    const todayStr = new Date().toISOString().split('T')[0];
+    const todayStr = new Date().toISOString().split("T")[0];
     if (dateStr === todayStr) return "Today";
-    return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    return new Date(dateStr).toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+    });
   };
 
   return (
     <div className="w-full max-w-[90rem] space-y-12 relative z-10 px-4 xl:px-10">
-      
       {/* --- HEADER --- */}
       <header className="flex justify-between items-end border-b border-white/10 pb-6">
         <div className="space-y-1">
-          <Link href="/daily-planner" className="text-sm font-medium text-slate-400 hover:text-white transition-colors flex items-center gap-2 mb-4 group">
-            <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" /> Return to Today
+          <Link
+            href="/daily-planner"
+            className="text-sm font-medium text-slate-400 hover:text-white transition-colors flex items-center gap-2 mb-4 group"
+          >
+            <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />{" "}
+            Return to Today
           </Link>
           <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-white to-slate-400 flex items-center gap-4">
             <Settings2 className="w-10 h-10 text-white" /> Manage Backlog
@@ -81,37 +143,44 @@ export default function ManageView({ initialTasks, initialHabits }: { initialTas
       </header>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-20">
-        
         {/* =========================================
             LEFT COLUMN: ONE-OFF TASKS 
         ========================================= */}
         <section className="space-y-6">
           <div className="flex items-center gap-3">
             <Target className="w-6 h-6 text-indigo-400" />
-            <h2 className="text-base font-bold text-slate-300 uppercase tracking-widest">Project Tasks</h2>
+            <h2 className="text-base font-bold text-slate-300 uppercase tracking-widest">
+              Project Tasks
+            </h2>
           </div>
-          
-          <form ref={taskFormRef} action={handleAddTask} className="relative group">
+
+          <form
+            ref={taskFormRef}
+            action={handleAddTask}
+            className="relative group"
+          >
             <div className="absolute -inset-0.5 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-2xl blur opacity-20 group-hover:opacity-40 transition duration-500"></div>
             <div className="relative flex flex-col md:flex-row bg-[#0c1222] border border-white/10 rounded-2xl shadow-2xl p-1.5 focus-within:ring-2 focus-within:ring-indigo-500/50 transition-all gap-1.5">
-              
-              <input 
-                type="text" 
-                name="title" 
-                placeholder="What needs to be done?" 
-                required 
-                className="flex-1 bg-transparent text-slate-200 px-4 py-3 text-lg focus:outline-none placeholder:text-slate-600 min-w-0" 
+              <input
+                type="text"
+                name="title"
+                placeholder="What needs to be done?"
+                required
+                className="flex-1 bg-transparent text-slate-200 px-4 py-3 text-lg focus:outline-none placeholder:text-slate-600 min-w-0"
               />
-              
+
               <div className="flex flex-1 md:flex-none gap-1.5">
-                
                 {/* --- THE NEW GOD-TIER DATE PICKER --- */}
                 <div className="relative flex items-center justify-center bg-white/[0.03] border border-white/10 hover:bg-white/[0.08] transition-colors rounded-xl px-4 py-3 w-full md:w-auto min-w-[120px] cursor-pointer group/date">
-                  <Calendar className={`w-4 h-4 mr-2 transition-colors ${scheduleDate ? 'text-indigo-400' : 'text-slate-500 group-hover/date:text-indigo-400'}`} />
-                  <span className={`text-sm font-medium transition-colors truncate ${scheduleDate ? 'text-white' : 'text-slate-400 group-hover/date:text-white'}`}>
+                  <Calendar
+                    className={`w-4 h-4 mr-2 transition-colors ${scheduleDate ? "text-indigo-400" : "text-slate-500 group-hover/date:text-indigo-400"}`}
+                  />
+                  <span
+                    className={`text-sm font-medium transition-colors truncate ${scheduleDate ? "text-white" : "text-slate-400 group-hover/date:text-white"}`}
+                  >
                     {getDisplayDate(scheduleDate)}
                   </span>
-                  
+
                   {/* The invisible native input */}
                   <input
                     type="date"
@@ -120,58 +189,80 @@ export default function ManageView({ initialTasks, initialHabits }: { initialTas
                     onChange={(e) => setScheduleDate(e.target.value)}
                     // This onClick forces the native calendar popup to open in Chrome/Safari!
                     onClick={(e) => {
-                      if ('showPicker' in HTMLInputElement.prototype) {
+                      if ("showPicker" in HTMLInputElement.prototype) {
                         (e.target as HTMLInputElement).showPicker();
                       }
                     }}
                     className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                   />
                 </div>
-                
-                <button disabled={isTaskAdding} type="submit" className="bg-indigo-600 hover:bg-indigo-500 text-white px-6 rounded-xl font-medium transition-colors flex items-center justify-center min-w-[120px]">
-                  {isTaskAdding ? <Loader2 className="w-5 h-5 animate-spin" /> : <span className="flex items-center gap-2 text-lg"><Plus className="w-5 h-5" /> Add</span>}
+
+                <button
+                  disabled={isTaskAdding}
+                  type="submit"
+                  className="bg-indigo-600 hover:bg-indigo-500 text-white px-6 rounded-xl font-medium transition-colors flex items-center justify-center min-w-[120px]"
+                >
+                  {isTaskAdding ? (
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                  ) : (
+                    <span className="flex items-center gap-2 text-lg">
+                      <Plus className="w-5 h-5" /> Add
+                    </span>
+                  )}
                 </button>
               </div>
-
             </div>
           </form>
 
           <ul className="space-y-3 pt-4">
             <AnimatePresence mode="popLayout">
               {initialTasks.map((task) => (
-                <motion.li 
+                <motion.li
                   layout
                   initial={{ opacity: 0, y: 20, scale: 0.95 }}
                   animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.9, transition: { duration: 0.2 } }}
-                  key={task.id} 
+                  exit={{
+                    opacity: 0,
+                    scale: 0.9,
+                    transition: { duration: 0.2 },
+                  }}
+                  key={task.id}
                   className="group relative flex justify-between items-center p-5 bg-white/[0.02] hover:bg-white/[0.04] border border-white/[0.05] rounded-2xl transition-colors overflow-hidden"
                 >
                   <div className="flex flex-col gap-1 relative z-10 overflow-hidden pr-4">
                     <div className="flex items-center gap-4">
                       <CheckCircle2 className="w-6 h-6 text-slate-600 flex-shrink-0 group-hover:text-indigo-400 transition-colors" />
-                      <span className="text-slate-200 font-medium text-lg truncate">{task.title}</span>
+                      <span className="text-slate-200 font-medium text-lg truncate">
+                        {task.title}
+                      </span>
                       {task.dailyItems && task.dailyItems.length > 0 && (
                         <span className="inline-flex items-center gap-1 text-[10px] font-mono font-bold text-indigo-400 bg-indigo-500/10 border border-indigo-500/20 px-2 py-0.5 rounded-full whitespace-nowrap w-max">
-                          📅 {formatShortDisplayDateIST(task.dailyItems[0].date)}
+                          📅{" "}
+                          {formatShortDisplayDateIST(task.dailyItems[0].date)}
                         </span>
                       )}
                     </div>
                   </div>
-                  
-                  <button 
+
+                  <button
                     onClick={() => handleDeleteTask(task.id)}
                     disabled={deletingIds.includes(task.id)}
                     title="Delete Task"
                     className="relative z-10 flex-shrink-0 text-slate-400 bg-slate-800/60 hover:text-red-400 hover:bg-red-400/20 p-2.5 rounded-xl transition-all"
                   >
-                    {deletingIds.includes(task.id) ? <Loader2 className="w-5 h-5 animate-spin" /> : <Trash2 className="w-5 h-5" />}
+                    {deletingIds.includes(task.id) ? (
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                    ) : (
+                      <Trash2 className="w-5 h-5" />
+                    )}
                   </button>
                 </motion.li>
               ))}
             </AnimatePresence>
             {initialTasks.length === 0 && (
-              <div className="text-center py-12 text-slate-600 italic text-lg">No active tasks in backlog.</div>
+              <div className="text-center py-12 text-slate-600 italic text-lg">
+                No active tasks in backlog.
+              </div>
             )}
           </ul>
         </section>
@@ -183,18 +274,37 @@ export default function ManageView({ initialTasks, initialHabits }: { initialTas
         <section className="space-y-6">
           <div className="flex items-center gap-3">
             <CalendarDays className="w-6 h-6 text-emerald-400" />
-            <h2 className="text-base font-bold text-slate-300 uppercase tracking-widest">Daily Habits</h2>
+            <h2 className="text-base font-bold text-slate-300 uppercase tracking-widest">
+              Daily Habits
+            </h2>
           </div>
-          
-          <form ref={habitFormRef} action={handleAddHabit} className="relative group">
-             <div className="absolute -inset-0.5 bg-gradient-to-r from-emerald-500 to-teal-600 rounded-2xl blur opacity-20 group-hover:opacity-40 transition duration-500"></div>
-             <div className="relative bg-[#0c1222] border border-white/10 rounded-2xl shadow-2xl p-6 space-y-6">
-              
+
+          <form
+            ref={habitFormRef}
+            action={handleAddHabit}
+            className="relative group"
+          >
+            <div className="absolute -inset-0.5 bg-gradient-to-r from-emerald-500 to-teal-600 rounded-2xl blur opacity-20 group-hover:opacity-40 transition duration-500"></div>
+            <div className="relative bg-[#0c1222] border border-white/10 rounded-2xl shadow-2xl p-6 space-y-6">
               <div className="flex gap-4">
-                <input type="text" name="title" placeholder="Habit name (e.g. Gym)" required className="flex-1 bg-white/[0.03] border border-white/10 text-slate-200 px-5 py-4 rounded-xl text-lg focus:outline-none focus:ring-2 focus:ring-emerald-500/50 transition-all placeholder:text-slate-600 min-w-0" />
+                <input
+                  type="text"
+                  name="title"
+                  placeholder="Habit name (e.g. Gym)"
+                  required
+                  className="flex-1 bg-white/[0.03] border border-white/10 text-slate-200 px-5 py-4 rounded-xl text-lg focus:outline-none focus:ring-2 focus:ring-emerald-500/50 transition-all placeholder:text-slate-600 min-w-0"
+                />
                 <div className="relative flex-shrink-0">
-                  <input type="number" name="cycles" defaultValue="1" min="1" className="w-24 h-full bg-white/[0.03] border border-white/10 text-slate-200 px-4 py-4 rounded-xl text-xl font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500/50 transition-all text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
-                  <span className="absolute -top-3 right-3 bg-[#0c1222] px-2 text-[11px] text-slate-500 font-bold tracking-widest uppercase">Cycles</span>
+                  <input
+                    type="number"
+                    name="cycles"
+                    defaultValue="1"
+                    min="1"
+                    className="w-24 h-full bg-white/[0.03] border border-white/10 text-slate-200 px-4 py-4 rounded-xl text-xl font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500/50 transition-all text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  />
+                  <span className="absolute -top-3 right-3 bg-[#0c1222] px-2 text-[11px] text-slate-500 font-bold tracking-widest uppercase">
+                    Cycles
+                  </span>
                 </div>
               </div>
 
@@ -202,16 +312,32 @@ export default function ManageView({ initialTasks, initialHabits }: { initialTas
                 <div className="flex gap-2 justify-center w-full sm:w-auto">
                   {DAYS.map((day, i) => (
                     <label key={i} className="cursor-pointer relative">
-                      <input type="checkbox" name="daysOfWeek" value={day.value} className="peer sr-only" defaultChecked />
+                      <input
+                        type="checkbox"
+                        name="daysOfWeek"
+                        value={day.value}
+                        className="peer sr-only"
+                        defaultChecked
+                      />
                       <div className="w-10 h-10 flex items-center justify-center rounded-full bg-slate-800/80 text-slate-500 text-sm font-bold peer-checked:bg-emerald-500 peer-checked:text-white peer-checked:shadow-[0_0_15px_rgba(16,185,129,0.4)] transition-all duration-300 hover:bg-slate-700">
                         {day.label}
                       </div>
                     </label>
                   ))}
                 </div>
-                
-                <button disabled={isHabitAdding} type="submit" className="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-500 text-white px-8 py-3 rounded-xl text-lg font-medium transition-colors flex items-center justify-center shadow-lg shadow-emerald-900/20">
-                  {isHabitAdding ? <Loader2 className="w-5 h-5 animate-spin" /> : <span className="flex items-center gap-2"><Plus className="w-5 h-5" /> Save</span>}
+
+                <button
+                  disabled={isHabitAdding}
+                  type="submit"
+                  className="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-500 text-white px-8 py-3 rounded-xl text-lg font-medium transition-colors flex items-center justify-center shadow-lg shadow-emerald-900/20"
+                >
+                  {isHabitAdding ? (
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                  ) : (
+                    <span className="flex items-center gap-2">
+                      <Plus className="w-5 h-5" /> Save
+                    </span>
+                  )}
                 </button>
               </div>
             </div>
@@ -220,43 +346,55 @@ export default function ManageView({ initialTasks, initialHabits }: { initialTas
           <ul className="space-y-3 pt-4">
             <AnimatePresence mode="popLayout">
               {initialHabits.map((habit) => (
-                <motion.li 
+                <motion.li
                   layout
                   initial={{ opacity: 0, y: 20, scale: 0.95 }}
                   animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.9, transition: { duration: 0.2 } }}
-                  key={habit.id} 
+                  exit={{
+                    opacity: 0,
+                    scale: 0.9,
+                    transition: { duration: 0.2 },
+                  }}
+                  key={habit.id}
                   className="group relative flex justify-between items-center p-5 bg-white/[0.02] hover:bg-white/[0.04] border border-white/[0.05] rounded-2xl transition-colors"
                 >
                   <div className="flex flex-col gap-2 overflow-hidden pr-4">
                     <div className="flex items-center gap-4">
-                      <span className="text-slate-200 font-bold text-xl truncate">{habit.title}</span>
+                      <span className="text-slate-200 font-bold text-xl truncate">
+                        {habit.title}
+                      </span>
                       <span className="flex-shrink-0 text-[10px] font-mono font-bold text-emerald-400 bg-emerald-400/10 border border-emerald-400/20 px-2 py-0.5 rounded-full">
                         {habit.defaultCycles} CYC
                       </span>
                     </div>
                     <span className="text-sm text-slate-500 font-medium tracking-wide flex items-center gap-2 truncate">
-                      <CalendarDays className="w-4 h-4 flex-shrink-0" /> {formatDays(habit.daysOfWeek)}
+                      <CalendarDays className="w-4 h-4 flex-shrink-0" />{" "}
+                      {formatDays(habit.daysOfWeek)}
                     </span>
                   </div>
-                  
-                  <button 
+
+                  <button
                     onClick={() => handleDeleteHabit(habit.id)}
                     disabled={deletingIds.includes(habit.id)}
                     title="Delete Habit"
                     className="flex-shrink-0 text-slate-400 bg-slate-800/60 hover:text-red-400 hover:bg-red-400/20 p-2.5 rounded-xl transition-all"
                   >
-                     {deletingIds.includes(habit.id) ? <Loader2 className="w-5 h-5 animate-spin" /> : <Trash2 className="w-5 h-5" />}
+                    {deletingIds.includes(habit.id) ? (
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                    ) : (
+                      <Trash2 className="w-5 h-5" />
+                    )}
                   </button>
                 </motion.li>
               ))}
             </AnimatePresence>
             {initialHabits.length === 0 && (
-              <div className="text-center py-12 text-slate-600 italic text-lg">No habits scheduled.</div>
+              <div className="text-center py-12 text-slate-600 italic text-lg">
+                No habits scheduled.
+              </div>
             )}
           </ul>
         </section>
-
       </div>
     </div>
   );
