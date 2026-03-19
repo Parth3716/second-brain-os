@@ -12,7 +12,6 @@ model Task {
   title       String
   status      String    @default("BACKLOG")
   dailyItems  DailyPlanItem[]
-  @@index([status])
 }
 
 model Habit {
@@ -44,9 +43,6 @@ model DailyPlanItem {
   originalCycles  Int?
   status          String    @default("TODO")
   timeEntries     TimeEntry[]
-  @@index([date, status])
-  @@index([taskId])
-  @@index([habitId])
 }
 
 model TimeEntry {
@@ -59,6 +55,4 @@ model TimeEntry {
   durationSeconds     Int?
   entryType       String    @default("LIVE_TRACKED")
   notes           String?
-  @@index([planItemId])
-  @@index([startedAt])
 }
