@@ -1,7 +1,7 @@
 "use server";
 import { prisma } from "@/lib/prisma_client"
 import { revalidatePath } from "next/cache";
-import { getCurrentDateIST, getCurrentDateTimeIST, convertToIST } from "@/lib/helpers";
+import { getCurrentDateIST, getCurrentDateTimeIST, buildISTDateTime } from "@/lib/helpers";
 
 //-----------------------------------------------------------
 //---------------------DAILY RECORD--------------------------
@@ -300,7 +300,7 @@ export async function deleteTaskFromBacklog(id: string) {
     where: { id },
   });
   
-  revalidatePath("/daily-planner/backlog");
+  revalidatePath("/daily-planner/manage");
 }
 
 //-----------------------------------------------------------
@@ -545,9 +545,9 @@ export async function logPastEntry(formData: FormData) {
 
   if (!itemId || !startTime || !endTime) return;
 
-  const currentDate = getCurrentDateIST().toISOString().split('T')[0];
-  const startDateTime = convertToIST(`${currentDate}T${startTime}:00`);
-  const endDateTime = convertToIST(`${currentDate}T${endTime}:00`);
+  const currentDate = getCurrentDateIST();
+  const startDateTime = buildISTDateTime(currentDate, startTime);
+  const endDateTime = buildISTDateTime(currentDate, endTime);
 
   const diffMs = endDateTime.getTime() - startDateTime.getTime();
   const durationSeconds = Math.round(diffMs / 1000);
@@ -657,8 +657,8 @@ export async function abandonLiveTask(itemId: string, action: "PUSH" | "SKIP") {
   else if (action === "PUSH") {
     await prisma.dailyPlanItem.update({ where: { id: item.id }, data: { status: "PUSHED_TOMORROW" } });
     
-    const nextDay = currentDate;
-    nextDay.setDate(currentDate.getDate() + 1);
+    const nextDay = new Date(currentDate);
+    nextDay.setUTCDate(currentDate.getUTCDate() + 1);
     
     let tomorrowRecord = await prisma.dailyRecord.findUnique({ where: { date: nextDay } });
     if (!tomorrowRecord) tomorrowRecord = await prisma.dailyRecord.create({ data: { date: nextDay, status: "PLANNING" } });
@@ -690,8 +690,8 @@ export async function updateTimeEntry(id: string, formData: FormData) {
   if (!entry || !entry.planItem) return;
 
   const currentDateStr = currentDate.toISOString().split('T')[0];
-  const startDateTime = convertToIST(`${currentDateStr}T${startTime}:00`);
-  const endDateTime = convertToIST(`${currentDateStr}T${endTime}:00`);
+  const startDateTime = buildISTDateTime(currentDate, startTime);
+  const endDateTime = buildISTDateTime(currentDate, endTime);
   
   const diffMs = endDateTime.getTime() - startDateTime.getTime();
   const durationSeconds = Math.round(diffMs / 1000);
@@ -715,8 +715,8 @@ export async function addAdhocLog(formData: FormData) {
   if (!title || !startTime || !endTime) return;
 
   const currentDateStr = currentDate.toISOString().split('T')[0];
-  const startDateTime = convertToIST(`${currentDateStr}T${startTime}:00`);
-  const endDateTime = convertToIST(`${currentDateStr}T${endTime}:00`);
+  const startDateTime = buildISTDateTime(currentDate, startTime);
+  const endDateTime = buildISTDateTime(currentDate, endTime);
 
   const diffMs = endDateTime.getTime() - startDateTime.getTime();
   const durationSeconds = Math.round(diffMs / 1000);

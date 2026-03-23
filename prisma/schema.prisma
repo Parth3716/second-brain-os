@@ -32,11 +32,11 @@ model DailyRecord {
 model DailyPlanItem {
   id              String    @id @default(uuid())
   date            DateTime
-  dailyRecord     DailyRecord @relation(fields: [date], references: [date])
+  dailyRecord     DailyRecord @relation(fields: [date], references: [date], onDelete: Cascade)
   taskId          String?
-  task            Task?     @relation(fields: [taskId], references: [id])
+  task            Task?     @relation(fields: [taskId], references: [id], onDelete: SetNull)
   habitId         String?
-  habit           Habit?    @relation(fields: [habitId], references: [id])
+  habit           Habit?    @relation(fields: [habitId], references: [id], onDelete: SetNull)
   title           String
   orderIndex      Int
   estimatedCycles Int
@@ -48,7 +48,7 @@ model DailyPlanItem {
 model TimeEntry {
   id              String    @id @default(uuid())
   planItemId      String?   
-  planItem        DailyPlanItem? @relation(fields: [planItemId], references: [id])
+  planItem        DailyPlanItem? @relation(fields: [planItemId], references: [id], onDelete: Cascade)
   title           String
   startedAt       DateTime
   endedAt         DateTime?

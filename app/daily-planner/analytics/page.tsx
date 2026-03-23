@@ -31,7 +31,10 @@ export default async function AnalyticsPage() {
   // 3. Crunching the Daily Chart Data (Grouping by Date)
   const dailyDataMap: Record<string, number> = {};
   timeEntries.forEach(entry => {
-    const dateStr = entry.startedAt.toISOString().split('T')[0]; // YYYY-MM-DD
+    const dateStr = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Kolkata",
+    }).format(entry.startedAt);
+  
     if (!dailyDataMap[dateStr]) dailyDataMap[dateStr] = 0;
     dailyDataMap[dateStr] += (entry.durationSeconds || 0);
   });
