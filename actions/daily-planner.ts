@@ -2,7 +2,7 @@
 import { prisma } from "@/lib/prisma_client"
 import { revalidatePath } from "next/cache";
 import { getUserId } from "@/lib/auth";
-import { getCurrentDateIST, getCurrentDateTimeIST, buildISTDateTime } from "@/lib/helpers";
+import { getCurrentDateIST, getISTDayOfWeek, getCurrentDateTimeIST, buildISTDateTime } from "@/lib/helpers";
 
 //-----------------------------------------------------------
 //---------------------DAILY RECORD--------------------------
@@ -19,7 +19,7 @@ export async function initializeDailyRecordAndHabits() {
     dailyRecord = await prisma.dailyRecord.create({
       data: { date: currentDate, userId, status: "PLANNING" },
     });
-    const currentDayOfWeek = currentDate.getDay(); 
+    const currentDayOfWeek = getISTDayOfWeek();
     const todaysHabits = await prisma.habit.findMany({
       where: { userId, daysOfWeek: { has: currentDayOfWeek } },
     });
@@ -39,6 +39,13 @@ export async function initializeDailyRecordAndHabits() {
       });
     }
   }
+}
+
+export interface RolloverTask {
+  taskId: string | null;
+  title: string;
+  estimatedCycles: number;
+  originalCycles: number | null;
 }
 
 export async function cleanupGhostDays() {
@@ -65,7 +72,7 @@ export async function cleanupGhostDays() {
     orderBy: { date: "asc" },
   });
 
-  const tasksToRollover: any[] = [];
+  const tasksToRollover: RolloverTask[] = [];
 
   for (const record of ghostRecords) {
     await prisma.timeEntry.deleteMany({

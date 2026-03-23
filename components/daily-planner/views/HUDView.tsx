@@ -5,12 +5,13 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Play, Pause, CheckCircle2, FastForward, Coffee, CalendarOff, Settings2, X, PlusCircle, Target, PartyPopper, Trash2, CalendarClock } from "lucide-react";
 import { startLiveTask, pauseLiveTask, completeLiveTask, endDay, wrapUpDayEarly, abandonLiveTask, addCycleToItem} from "@/actions/daily-planner"
 import { getCurrentDateTimeIST } from "@/lib/helpers";
+import type { DailyRecord, TimeEntry, DailyPlanItem } from "@/types/daily_planner";
 
 const SECONDS_PER_CYCLE = 60; // Set to 45 * 60 for real life!
 const BREAK_DURATION = 5 * 60; // 5 minutes
 
-export default function HUDView({ dailyRecord, activeTimeEntry, pastDurationSeconds }: { dailyRecord: any, activeTimeEntry: any, pastDurationSeconds: number }) {
-  const queue = (dailyRecord.items || []).filter((item: any) => item.status === "TODO");
+export default function HUDView({ dailyRecord, activeTimeEntry, pastDurationSeconds }: { dailyRecord: DailyRecord, activeTimeEntry: TimeEntry | null, pastDurationSeconds: number }) {
+  const queue = (dailyRecord.items || []).filter((item) => item.status === "TODO");
   const currentTask = queue[0];
   const nextTaskInBar = queue[1];
 
@@ -411,7 +412,7 @@ export default function HUDView({ dailyRecord, activeTimeEntry, pastDurationSeco
                     You have <span className="font-bold text-rose-400">{queue.length} items</span> left in your queue. Let's clean them up:
                   </div>
                   <div className="space-y-3 max-h-[30vh] overflow-y-auto pr-2 custom-scrollbar">
-                    {queue.map((item: any) => (
+                    {queue.map((item) => (
                       <div key={item.id} className="flex flex-col sm:flex-row sm:items-center justify-between bg-black/20 border border-white/5 p-3 rounded-xl gap-3">
                         <span className="text-sm font-medium text-slate-300 truncate pr-4 flex items-center gap-2">
                           <Settings2 className="w-4 h-4 text-slate-600" /> {item.title}

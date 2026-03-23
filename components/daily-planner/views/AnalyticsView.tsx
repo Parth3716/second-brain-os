@@ -3,13 +3,14 @@
 import { motion, Variants } from "framer-motion";
 import { ArrowLeft, Activity, Clock, Target, Zap, BrainCircuit, Flame, CalendarOff, BarChart3 } from "lucide-react";
 import Link from "next/link";
+import type { AnalyticsStats, ChartDataPoint } from "@/types/daily_planner";
 
-export default function AnalyticsView({ stats }: { stats: any }) {
+export default function AnalyticsView({ stats }: { stats: AnalyticsStats }) {
   const containerVars: Variants = { hidden: { opacity: 0 }, show: { opacity: 1, transition: { staggerChildren: 0.1 } } };
   const itemVars: Variants = { hidden: { opacity: 0, y: 20 }, show: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 300, damping: 24 } } };
 
   // Chart math to calculate the heights of the bars dynamically
-  const maxHours = stats.chartData.length > 0 ? Math.max(...stats.chartData.map((d: any) => d.hours)) : 1;
+  const maxHours = stats.chartData.length > 0 ? Math.max(...stats.chartData.map((d) => d.hours)) : 1;
 
   return (
     <main className="min-h-screen bg-[#030712] relative flex justify-center p-4 md:p-12 overflow-hidden selection:bg-indigo-500/30">
@@ -94,7 +95,7 @@ export default function AnalyticsView({ stats }: { stats: any }) {
                   </div>
 
                   {/* The Bars */}
-                  {stats.chartData.map((data: any, idx: number) => {
+                  {stats.chartData.map((data, idx) => {
                     const heightPercent = maxHours > 0 ? (data.hours / maxHours) * 100 : 0;
                     return (
                       <div key={idx} className="flex-1 flex flex-col items-center gap-3 relative group">

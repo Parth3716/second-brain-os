@@ -7,8 +7,17 @@ import Link from "next/link";
 import QueueItem from "@/components/daily-planner/ui/QueueItem";
 import { addHabitToQueue, addTaskToQueue, startDay, takeDayOff } from "@/actions/daily-planner"
 import { formatShortDisplayDateIST } from "@/lib/helpers";
+import type { Task, Habit, DailyPlanItem } from "@/types/daily_planner";
 
-export default function PlanningView({ backlogTasks, routines, todaysQueue, totalCycles, formattedDate }: any) {
+interface PlanningViewProps {
+  backlogTasks: Task[];
+  routines: Habit[];
+  todaysQueue: DailyPlanItem[];
+  totalCycles: number;
+  formattedDate: string;
+}
+
+export default function PlanningView({ backlogTasks, routines, todaysQueue, totalCycles, formattedDate }: PlanningViewProps) {
   const [isHabitsOpen, setIsHabitsOpen] = useState(true);
   const [isTasksOpen, setIsTasksOpen] = useState(true);
   
@@ -74,7 +83,7 @@ export default function PlanningView({ backlogTasks, routines, todaysQueue, tota
                   {routines.length === 0 ? (
                     <li className="text-xs text-slate-600 italic py-2 px-6">No habits configured.</li>
                   ) : (
-                    routines.map((habit: any) => (
+                    routines.map((habit) => (
                       <li key={habit.id} className="bg-white/[0.02] border border-white/[0.05] rounded-xl p-2 pl-4 text-sm text-slate-300 flex items-center justify-between group/item transition-colors hover:bg-white/[0.04]">
                         <span className="truncate pr-4 flex items-center gap-3 font-medium">
                           <div className="w-1.5 h-1.5 rounded-full bg-slate-600 group-hover/item:bg-emerald-500 transition-colors" />
@@ -109,7 +118,7 @@ export default function PlanningView({ backlogTasks, routines, todaysQueue, tota
                     {backlogTasks.length === 0 ? (
                       <li className="text-xs text-slate-600 italic py-2 px-6">No tasks. Add some in Manage.</li>
                     ) : (
-                      backlogTasks.map((task: any) => (
+                      backlogTasks.map((task) => (
                         <motion.li 
                           layout initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, scale: 0.9 }}
                           key={task.id} 
@@ -192,7 +201,7 @@ export default function PlanningView({ backlogTasks, routines, todaysQueue, tota
                     <p className="text-slate-500 text-xs md:text-sm mt-1">Click the + buttons on the left to draft your day.</p>
                   </motion.div>
                 ) : (
-                  todaysQueue.map((item: any, index: number) => (
+                  todaysQueue.map((item, index) => (
                     <motion.div 
                       layout initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.9, x: 20 }} transition={{ type: "spring", stiffness: 300, damping: 25 }}
                       key={item.id} 

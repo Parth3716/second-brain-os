@@ -18,7 +18,11 @@ export default async function DailyPlannerHomePage() {
     include: { items: { orderBy: { orderIndex: 'asc' } } }
   });
 
-  const status = dailyRecord?.status;
+  if (!dailyRecord) {
+    return <div className="text-white p-10">No record found for today.</div>;
+  }
+
+  const status = dailyRecord.status;
 
   if (status === "PLANNING") {
     const backlogTasks = await prisma.task.findMany({
@@ -40,8 +44,8 @@ export default async function DailyPlannerHomePage() {
     });
     const routines = await prisma.habit.findMany({ where: { userId }, orderBy: { title: "asc" } });
 
-    const todaysQueue = (dailyRecord?.items || []).filter((item: any) => item.status === "TODO");
-    const totalCycles = todaysQueue.reduce((sum: number, item: any) => sum + item.estimatedCycles, 0);
+    const todaysQueue = (dailyRecord.items || []).filter((item) => item.status === "TODO");
+    const totalCycles = todaysQueue.reduce((sum, item) => sum + item.estimatedCycles, 0);
 
     return (
         <PlanningView 
@@ -63,7 +67,7 @@ export default async function DailyPlannerHomePage() {
       }
     });
 
-    const currentTask = dailyRecord?.items.find(i => i.status === "TODO");
+    const currentTask = dailyRecord.items.find(i => i.status === "TODO");
 
     let pastDurationSeconds = 0;
     if (currentTask) {

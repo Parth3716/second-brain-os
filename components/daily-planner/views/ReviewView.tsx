@@ -5,30 +5,31 @@ import Link from "next/link";
 import { CheckCircle2, Trash2, Settings2, Sparkles, Clock, History, PlayCircle, Zap, BarChart3, Plus, Edit2, X } from "lucide-react";
 import { motion, AnimatePresence, Variants } from "framer-motion";
 import { formatTimeHM } from "@/lib/helpers";
-import { updateTimeEntry, addAdhocLog, deleteTimeEntry } from "../../../actions/daily-planner"; 
+import { updateTimeEntry, addAdhocLog, deleteTimeEntry } from "../../../actions/daily-planner";
+import type { DailyRecord, TimeEntry } from "@/types/daily_planner";
 
-export default function ReviewView({ dailyRecord, timeEntries, formattedDate }: { dailyRecord: any, timeEntries: any, formattedDate: string }) {
+export default function ReviewView({ dailyRecord, timeEntries, formattedDate }: { dailyRecord: DailyRecord, timeEntries: TimeEntry[], formattedDate: string }) {
   const isPartial = dailyRecord.status === "ENDED_EARLY" || dailyRecord.status === "PARTIAL_DAY";
 
   // --- MODAL STATES ---
   const [isAddingAdhoc, setIsAddingAdhoc] = useState(false);
-  const [editingEntry, setEditingEntry] = useState<any>(null);
+  const [editingEntry, setEditingEntry] = useState<TimeEntry | null>(null);
 
   // --- 1. PREMIUM ANALYTICS MATH ---
   const totalItems = dailyRecord.items.length;
-  const completedItems = dailyRecord.items.filter((i: any) => i.status === "COMPLETED").length;
+  const completedItems = dailyRecord.items.filter((i) => i.status === "COMPLETED").length;
   const completionRate = totalItems > 0 ? Math.round((completedItems / totalItems) * 100) : 0;
 
-  const totalSeconds = timeEntries.reduce((sum: number, entry: any) => sum + (entry.durationSeconds || 0), 0);
+  const totalSeconds = timeEntries.reduce((sum, entry) => sum + (entry.durationSeconds || 0), 0);
   const hours = Math.floor(totalSeconds / 3600);
   const minutes = Math.floor((totalSeconds % 3600) / 60);
   const focusTimeStr = hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
 
-  const liveSessions = timeEntries.filter((e: any) => e.entryType === "LIVE_TRACKED").length;
-  const manualSessions = timeEntries.filter((e: any) => e.entryType === "MANUAL").length;
+  const liveSessions = timeEntries.filter((e) => e.entryType === "LIVE_TRACKED").length;
+  const manualSessions = timeEntries.filter((e) => e.entryType === "MANUAL").length;
 
-  const liveSeconds = timeEntries.filter((e: any) => e.entryType === "LIVE_TRACKED").reduce((sum: number, e: any) => sum + (e.durationSeconds || 0), 0);
-  const manualSeconds = timeEntries.filter((e: any) => e.entryType === "MANUAL").reduce((sum: number, e: any) => sum + (e.durationSeconds || 0), 0);
+  const liveSeconds = timeEntries.filter((e) => e.entryType === "LIVE_TRACKED").reduce((sum, e) => sum + (e.durationSeconds || 0), 0);
+  const manualSeconds = timeEntries.filter((e) => e.entryType === "MANUAL").reduce((sum, e) => sum + (e.durationSeconds || 0), 0);
   
   const livePercent = totalSeconds > 0 ? (liveSeconds / totalSeconds) * 100 : 0;
   const manualPercent = totalSeconds > 0 ? (manualSeconds / totalSeconds) * 100 : 0;
@@ -44,7 +45,7 @@ export default function ReviewView({ dailyRecord, timeEntries, formattedDate }: 
   const pillColor = isPartial ? "bg-amber-500/10 text-amber-400 border-amber-500/20" : "bg-emerald-500/10 text-emerald-400 border-emerald-500/20";
   
   // Extracts HH:mm for the HTML <input type="time"> editor modals
-  const getInputTime = (dateStr: string) => {
+  const getInputTime = (dateStr: string | Date) => {
     const d = new Date(dateStr);
     return `${d.getUTCHours().toString().padStart(2, '0')}:${d.getUTCMinutes().toString().padStart(2, '0')}`;
   };
@@ -175,7 +176,7 @@ export default function ReviewView({ dailyRecord, timeEntries, formattedDate }: 
               </div>
             ) : (
               <div className="relative border-l-2 border-white/10 ml-4 md:ml-6 pb-10 space-y-8 mt-4">
-                {timeEntries.map((entry: any) => {
+                {timeEntries.map((entry) => {
                   const isLive = entry.entryType === "LIVE_TRACKED";
                   const mins = entry.durationSeconds ? Math.ceil(entry.durationSeconds / 60) : 0;
                   
@@ -252,7 +253,7 @@ export default function ReviewView({ dailyRecord, timeEntries, formattedDate }: 
                 <h3 className="font-bold text-white flex items-center gap-2 text-sm md:text-base"><Edit2 className="w-4 h-4 md:w-5 md:h-5 text-blue-400"/> Edit Timeline Entry</h3>
                 <button onClick={() => setEditingEntry(null)} className="text-slate-400 hover:text-white"><X className="w-5 h-5"/></button>
               </div>
-              <form action={async (fd) => { await updateTimeEntry(editingEntry.id, fd); setEditingEntry(null); }}>
+              <form action={async (fd: FormData) => { await updateTimeEntry(editingEntry.id, fd); setEditingEntry(null); }}>
                 <div className="p-5 md:p-6 space-y-5 md:space-y-6">
                   <div>
                     <label className="block text-[10px] md:text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Task</label>

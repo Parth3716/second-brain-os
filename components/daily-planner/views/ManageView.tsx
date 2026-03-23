@@ -6,6 +6,7 @@ import { Plus, Trash2, ArrowLeft, Settings2, CheckCircle2, Target, CalendarDays,
 import Link from "next/link";
 import { addTaskToBacklog, deleteTaskFromBacklog, addHabitToBacklog, deleteHabitFromBacklog } from "@/actions/daily-planner"
 import { formatShortDisplayDateIST } from "@/lib/helpers";
+import type { Task, Habit } from "@/types/daily_planner";
 
 const DAYS = [
   { value: 1, label: "M" }, { value: 2, label: "T" }, { value: 3, label: "W" },
@@ -19,7 +20,7 @@ function formatDays(daysArray: number[]) {
   return [...daysArray].sort((a, b) => (a === 0 ? 7 : a) - (b === 0 ? 7 : b)).map(d => dayMap[d]).join(", ");
 }
 
-export default function ManageView({ initialTasks, initialHabits }: { initialTasks: any[], initialHabits: any[] }) {
+export default function ManageView({ initialTasks, initialHabits }: { initialTasks: Task[], initialHabits: Habit[] }) {
   const taskFormRef = useRef<HTMLFormElement>(null);
   const habitFormRef = useRef<HTMLFormElement>(null);
   
