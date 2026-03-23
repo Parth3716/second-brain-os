@@ -7,11 +7,27 @@ datasource db {
   provider = "postgresql"
 }
 
+model User {
+  id           String        @id
+  email        String
+  name         String?
+  image        String?
+  tasks        Task[]
+  habits       Habit[]
+  dailyRecords DailyRecord[]
+  createdAt    DateTime      @default(now())
+}
+
 model Task {
   id          String    @id @default(uuid())
   title       String
   status      String    @default("BACKLOG")
+  userId     String
+  user       User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   dailyItems  DailyPlanItem[]
+
+  @@index([status])
+  @@index([userId])
 }
 
 model Habit {
@@ -19,20 +35,30 @@ model Habit {
   title         String
   defaultCycles Int
   daysOfWeek    Int[]
+  userId        String
+  user          User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   dailyItems  DailyPlanItem[]
+
+  @@index([userId])
 }
 
 model DailyRecord {
-  date        DateTime  @id
-  status      String    @default("PLANNING")
-  notes       String?
-  items       DailyPlanItem[]
+  date   DateTime
+  status String          @default("PLANNING")
+  notes  String?
+  userId String
+  user   User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items  DailyPlanItem[]
+
+  @@id([date, userId])
+  @@index([userId])
 }
 
 model DailyPlanItem {
   id              String    @id @default(uuid())
   date            DateTime
-  dailyRecord     DailyRecord @relation(fields: [date], references: [date], onDelete: Cascade)
+  userId          String
+  dailyRecord     DailyRecord @relation(fields: [date, userId], references: [date, userId], onDelete: Cascade)
   taskId          String?
   task            Task?     @relation(fields: [taskId], references: [id], onDelete: SetNull)
   habitId         String?
@@ -43,6 +69,11 @@ model DailyPlanItem {
   originalCycles  Int?
   status          String    @default("TODO")
   timeEntries     TimeEntry[]
+
+  @@index([date, status])
+  @@index([taskId])
+  @@index([habitId])
+  @@index([userId])
 }
 
 model TimeEntry {
@@ -55,4 +86,7 @@ model TimeEntry {
   durationSeconds     Int?
   entryType       String    @default("LIVE_TRACKED")
   notes           String?
+
+  @@index([planItemId])
+  @@index([startedAt])
 }

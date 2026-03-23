@@ -1,18 +1,21 @@
 // app/daily-planner/analytics/page.tsx
 import { prisma } from "@/lib/prisma_client";
 import AnalyticsView from "@/components/daily-planner/views/AnalyticsView"
+import { getUserId } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
 export default async function AnalyticsPage() {
-  // 1. Fetch all data
+  const userId = await getUserId();
+
   const timeEntries = await prisma.timeEntry.findMany({
+    where: { planItem: { userId } },
     orderBy: { startedAt: 'asc' },
     include: { planItem: true }
   });
 
   const planItems = await prisma.dailyPlanItem.findMany({
-    where: { status: { in: ["COMPLETED", "SKIPPED", "PUSHED_TOMORROW"] } }
+    where: { userId, status: { in: ["COMPLETED", "SKIPPED", "PUSHED_TOMORROW"] } }
   });
 
   // 2. Crunching the High-Level Stats

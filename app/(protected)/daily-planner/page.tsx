@@ -1,18 +1,20 @@
 import {prisma} from "@/lib/prisma_client"
 import { initializeDailyRecordAndHabits, cleanupGhostDays } from "@/actions/daily-planner"
 import { getCurrentDateIST, formatDisplayDateIST } from "@/lib/helpers"
+import { getUserId } from "@/lib/auth";
 import PlanningView from "@/components/daily-planner/views/PlanningView"
 import HUDView from "@/components/daily-planner/views/HUDView"
 import ReviewView from "@/components/daily-planner/views/ReviewView"
 import RestDayView from "@/components/daily-planner/views/RestDayView";
 
 export default async function DailyPlannerHomePage() {
+  const userId = await getUserId();
   await cleanupGhostDays();
   await initializeDailyRecordAndHabits();
   const today = getCurrentDateIST();
 
   const dailyRecord = await prisma.dailyRecord.findUnique({
-    where: { date: today },
+    where: { date_userId: { date: today, userId } },
     include: { items: { orderBy: { orderIndex: 'asc' } } }
   });
 
@@ -21,6 +23,7 @@ export default async function DailyPlannerHomePage() {
   if (status === "PLANNING") {
     const backlogTasks = await prisma.task.findMany({
       where: {
+        userId,
         status: { in: ["BACKLOG", "QUEUED"] },
         dailyItems: {
           none: { date: today, status: "TODO" }
@@ -35,7 +38,7 @@ export default async function DailyPlannerHomePage() {
       },
       orderBy: { title: "asc" }
     });
-    const routines = await prisma.habit.findMany({ orderBy: { title: "asc" } });
+    const routines = await prisma.habit.findMany({ where: { userId }, orderBy: { title: "asc" } });
 
     const todaysQueue = (dailyRecord?.items || []).filter((item: any) => item.status === "TODO");
     const totalCycles = todaysQueue.reduce((sum: number, item: any) => sum + item.estimatedCycles, 0);
@@ -87,7 +90,7 @@ export default async function DailyPlannerHomePage() {
     const timeEntries = await prisma.timeEntry.findMany({
       where: { planItem: { date: today } },
       orderBy: { startedAt: 'asc' },
-      include: { planItem: true } // Pulls in the task details
+      include: { planItem: true }
     });
 
     return <ReviewView dailyRecord={dailyRecord} timeEntries={timeEntries} formattedDate={formatDisplayDateIST()}/>;
