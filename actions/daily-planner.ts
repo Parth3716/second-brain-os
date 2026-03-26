@@ -7,33 +7,6 @@ import { getCurrentDateIST, getISTDayOfWeek, getCurrentDateTimeIST, buildISTDate
 //-----------------------------------------------------------
 //---------------------DAILY RECORD--------------------------
 //-----------------------------------------------------------
-export async function initializeDailyRecordAndHabits() {
-  const userId = await getUserId();
-  const currentDate = getCurrentDateIST()
-
-  await prisma.dailyRecord.upsert({ where: {date_userId: { date: currentDate, userId } }, create: { date: currentDate, userId, status: "PLANNING" }, update: {} })
-
-  const currentDayOfWeek = getISTDayOfWeek();
-  const todaysHabits = await prisma.habit.findMany({
-    where: { userId, daysOfWeek: { has: currentDayOfWeek } },
-  });
-
-  if (todaysHabits.length > 0) {
-    await prisma.dailyPlanItem.createMany({
-      data: todaysHabits.map((habit, index) => ({
-        date: currentDate,
-        userId,
-        habitId: habit.id,
-        title: habit.title,
-        estimatedCycles: habit.defaultCycles,
-        originalCycles: habit.defaultCycles,
-        orderIndex: index,
-        status: "TODO",
-      })),
-    });
-  }
-}
-
 export interface RolloverTask {
   taskId: string | null;
   title: string;

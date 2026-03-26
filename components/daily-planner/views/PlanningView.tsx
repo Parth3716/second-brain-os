@@ -75,10 +75,8 @@ export default function PlanningView({setStatus, dailyRecord }: PlanningViewProp
 
   const handleRestDay = async (e: React.SubmitEvent<HTMLFormElement>) => {
     e.preventDefault();
-    setIsLoading("resting")
-    await takeDayOff();
     setStatus("REST_DAY")
-    setIsLoading(null)
+    await takeDayOff();
   };
 
   return (
@@ -224,8 +222,8 @@ export default function PlanningView({setStatus, dailyRecord }: PlanningViewProp
               </form>
 
               <form onSubmit={(e) => handleRestDay(e)} className="sm:col-span-1">
-                <button type="submit" disabled={isLoading !== null} className="w-full bg-white/[0.03] hover:bg-red-500/10 text-slate-300 hover:text-red-400 border border-white/5 hover:border-red-500/30 py-4 rounded-2xl font-bold tracking-widest text-xs md:text-sm transition-all flex justify-center items-center gap-2">
-                  {isLoading === "resting"? <Loader2 className="w-5 h-5 animate-spin" /> : <><CalendarOff className="w-4 h-4" /> TAKE DAY OFF</>}
+                <button type="submit" className="w-full bg-white/[0.03] hover:bg-red-500/10 text-slate-300 hover:text-red-400 border border-white/5 hover:border-red-500/30 py-4 rounded-2xl font-bold tracking-widest text-xs md:text-sm transition-all flex justify-center items-center gap-2">
+                  <><CalendarOff className="w-4 h-4" /> TAKE DAY OFF</>
                 </button>
               </form>
 
