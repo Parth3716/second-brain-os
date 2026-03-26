@@ -11,33 +11,26 @@ export async function initializeDailyRecordAndHabits() {
   const userId = await getUserId();
   const currentDate = getCurrentDateIST()
 
-  let dailyRecord = await prisma.dailyRecord.findUnique({
-    where: { date_userId: { date: currentDate, userId } },
+  await prisma.dailyRecord.upsert({ where: {date_userId: { date: currentDate, userId } }, create: { date: currentDate, userId, status: "PLANNING" }, update: {} })
+
+  const currentDayOfWeek = getISTDayOfWeek();
+  const todaysHabits = await prisma.habit.findMany({
+    where: { userId, daysOfWeek: { has: currentDayOfWeek } },
   });
 
-  if (!dailyRecord) {
-    dailyRecord = await prisma.dailyRecord.create({
-      data: { date: currentDate, userId, status: "PLANNING" },
+  if (todaysHabits.length > 0) {
+    await prisma.dailyPlanItem.createMany({
+      data: todaysHabits.map((habit, index) => ({
+        date: currentDate,
+        userId,
+        habitId: habit.id,
+        title: habit.title,
+        estimatedCycles: habit.defaultCycles,
+        originalCycles: habit.defaultCycles,
+        orderIndex: index,
+        status: "TODO",
+      })),
     });
-    const currentDayOfWeek = getISTDayOfWeek();
-    const todaysHabits = await prisma.habit.findMany({
-      where: { userId, daysOfWeek: { has: currentDayOfWeek } },
-    });
-
-    if (todaysHabits.length > 0) {
-      await prisma.dailyPlanItem.createMany({
-        data: todaysHabits.map((habit, index) => ({
-          date: currentDate,
-          userId,
-          habitId: habit.id,
-          title: habit.title,
-          estimatedCycles: habit.defaultCycles,
-          originalCycles: habit.defaultCycles,
-          orderIndex: index,
-          status: "TODO",
-        })),
-      });
-    }
   }
 }
 
@@ -119,10 +112,7 @@ export async function cleanupGhostDays() {
   }
 
   if (tasksToRollover.length > 0) {
-    let todaysRecord = await prisma.dailyRecord.findUnique({ where:  { date_userId: { date: currentDate, userId } } });
-    if (!todaysRecord) {
-      todaysRecord = await prisma.dailyRecord.create({ data: { date: currentDate, userId, status: "PLANNING" } });
-    }
+    await prisma.dailyRecord.upsert({ where: {date_userId: { date: currentDate, userId } }, create: { date: currentDate, userId, status: "PLANNING" }, update: {} })
 
     const todaysItemsCount = await prisma.dailyPlanItem.count({ where: { date: currentDate, userId } });
 
@@ -173,8 +163,6 @@ export async function startDay() {
       });
     }
   }
-
-  revalidatePath("/daily-planner");
 }
 
 export async function takeDayOff() {
@@ -256,13 +244,7 @@ export async function wrapUpDayEarly(formData: FormData) {
       const nextDay = currentDate;
       nextDay.setDate(currentDate.getDate() + 1);
 
-      let tomorrowRecord = await prisma.dailyRecord.findUnique({
-        where: { date_userId: { date: nextDay, userId } },
-      });
-
-      if (!tomorrowRecord) {
-        tomorrowRecord = await prisma.dailyRecord.create({ data: { date: nextDay, userId, status: "PLANNING" } });
-      }
+      await prisma.dailyRecord.upsert({ where: {date_userId: { date: nextDay, userId } }, create: { date: nextDay, userId, status: "PLANNING" }, update: {} })
 
       const tomorrowCount = await prisma.dailyPlanItem.count({
         where: { date: nextDay, userId },
@@ -289,6 +271,30 @@ export async function wrapUpDayEarly(formData: FormData) {
 //-----------------------------------------------------------
 //---------------------TASKS---------------------------------
 //-----------------------------------------------------------
+export async function getCurrentBacklogTasks() {
+  const userId = await getUserId();
+  const today = getCurrentDateIST();
+  const backlogTasks = await prisma.task.findMany({
+    where: {
+      userId,
+      status: { in: ["BACKLOG", "QUEUED"] },
+      dailyItems: {
+        none: { date: today, status: "TODO" }
+      }
+    },
+    include: {
+      dailyItems: {
+        where: { status: "TODO", date: { gt: today } },
+        orderBy: { date: 'asc' },
+        take: 1
+      }
+    },
+    orderBy: { title: "asc" }
+  });
+  
+  return backlogTasks
+}
+
 export async function addTaskToBacklog(formData: FormData) {
   const userId = await getUserId();
   const title = formData.get("title") as string;
@@ -306,15 +312,7 @@ export async function addTaskToBacklog(formData: FormData) {
 
   if (scheduledDateStr) {
     const scheduledDate = new Date(`${scheduledDateStr}T00:00:00.000Z`);
-    let futureRecord = await prisma.dailyRecord.findUnique({
-      where: { date_userId: { date: scheduledDate, userId } },
-    });
-
-    if (!futureRecord) {
-      futureRecord = await prisma.dailyRecord.create({
-        data: { date: scheduledDate, userId, status: "PLANNING" },
-      });
-    }
+    await prisma.dailyRecord.upsert({ where: {date_userId: { date: scheduledDate, userId } }, create: { date: scheduledDate, userId, status: "PLANNING" }, update: {} })
 
     const futureCount = await prisma.dailyPlanItem.count({
       where: { date: scheduledDate, userId },
@@ -349,6 +347,13 @@ export async function deleteTaskFromBacklog(id: string) {
 //-----------------------------------------------------------
 //---------------------HABITS--------------------------------
 //-----------------------------------------------------------
+export async function getUserHabits() {
+  const userId = await getUserId();
+  const habits = await prisma.habit.findMany({ where: { userId }, orderBy: { title: "asc" } });
+  
+  return habits
+}
+
 export async function addHabitToBacklog(formData: FormData) {
   const userId = await getUserId();
   const title = formData.get("title") as string;
@@ -393,14 +398,13 @@ export async function addTaskToQueue(taskId: string, formData: FormData) {
   const task = await prisma.task.findUnique({ where: { id: taskId } });
   if (!task) return;
 
-  let dailyRecord = await prisma.dailyRecord.findUnique({ where: { date_userId: { date: currentDate, userId } }, });
-  if (!dailyRecord) dailyRecord = await prisma.dailyRecord.create({ data: { date: currentDate, userId }, });
+  await prisma.dailyRecord.upsert({ where: {date_userId: { date: currentDate, userId } }, create: { date: currentDate, userId, status: "PLANNING" }, update: {} })
   
   const activeCount = await prisma.dailyPlanItem.count({ 
     where: { date: currentDate, userId, status: "TODO" } 
   });
 
-  await prisma.$transaction([
+  const result = await prisma.$transaction([
     prisma.dailyPlanItem.create({
       data: {
         date: currentDate,
@@ -419,7 +423,10 @@ export async function addTaskToQueue(taskId: string, formData: FormData) {
     })
   ]);
 
-  revalidatePath("/daily-planner");
+  return {
+    newDailyPlanItem: result[0],
+    updatedTask: result[1]
+  }
 }
 
 export async function addHabitToQueue(habitId: string) {
@@ -429,16 +436,13 @@ export async function addHabitToQueue(habitId: string) {
   const habit = await prisma.habit.findUnique({ where: { id: habitId } });
   if (!habit) return;
 
-  let dailyRecord = await prisma.dailyRecord.findUnique({ where: { date_userId: { date: currentDate, userId } }, });
-  if (!dailyRecord) {
-    dailyRecord = await prisma.dailyRecord.create({ data: { date: currentDate, userId, status: "PLANNING" }, });
-  }
+  await prisma.dailyRecord.upsert({ where: {date_userId: { date: currentDate, userId } }, create: { date: currentDate, userId, status: "PLANNING" }, update: {} })
 
   const activeCount = await prisma.dailyPlanItem.count({ 
     where: { date: currentDate, userId, status: "TODO" } 
   });
 
-  await prisma.dailyPlanItem.create({
+  const newDailyPlanItem = await prisma.dailyPlanItem.create({
     data: {
       date: currentDate,
       userId,
@@ -451,7 +455,7 @@ export async function addHabitToQueue(habitId: string) {
     }
   });
 
-  revalidatePath("/daily-planner");
+  return newDailyPlanItem
 }
 
 export async function removeItemFromQueue(itemId: string) {
@@ -461,21 +465,28 @@ export async function removeItemFromQueue(itemId: string) {
   
   if (!queuedItem) return;
 
-  await prisma.$transaction(async (tx) => {
-    if (queuedItem.taskId) {
-      await tx.task.update({
+  let transactions = [
+    prisma.dailyPlanItem.delete({
+      where: { id: itemId }
+    })
+  ]
+
+  if (queuedItem.taskId) {
+    transactions.push(
+      prisma.task.update({
         where: { id: queuedItem.taskId },
         data: { status: "BACKLOG" }
-      });
-    }
+      }) as any
+    )
+  }
 
-    await tx.dailyPlanItem.delete({
-      where: { id: itemId }
-    });
-  });
+  const result = await prisma.$transaction(transactions);
 
   await normalizeQueueOrder(queuedItem.date, queuedItem.userId);
-  revalidatePath("/daily-planner");
+  return {
+    updatedDailyPlanItem: result[0],
+    updatedTask: result[1] ?? null
+  }
 }
 
 export async function updateQueueItem(formData: FormData) {
@@ -487,6 +498,7 @@ export async function updateQueueItem(formData: FormData) {
 
   const item = await prisma.dailyPlanItem.findUnique({ where: { id: itemId } });
   if (!item) return;
+  const previousEstimatedCycles = item.estimatedCycles
 
   const transaction = [];
 
@@ -510,8 +522,12 @@ export async function updateQueueItem(formData: FormData) {
     );
   }
 
-  await prisma.$transaction(transaction);
-  revalidatePath("/daily-planner");
+  const result = await prisma.$transaction(transaction);
+  return {
+    updatedDailyPlanItem: result[0],
+    updatedTask: result[1] ?? null,
+    previousEstimatedCylces: previousEstimatedCycles
+  }
 }
 
 export async function moveItemUpInQueue(itemId: string) {
@@ -524,11 +540,14 @@ export async function moveItemUpInQueue(itemId: string) {
   });
 
   if (itemAbove) {
-    await prisma.$transaction([
+    const result = await prisma.$transaction([
       prisma.dailyPlanItem.update({ where: { id: item.id }, data: { orderIndex: itemAbove.orderIndex } }),
       prisma.dailyPlanItem.update({ where: { id: itemAbove.id }, data: { orderIndex: item.orderIndex } })
     ]);
-    revalidatePath("/daily-planner");
+    return {
+      updatedDailyPlanItem: result[0],
+      updatedDailyPlanItemAdjacent: result[1]
+    };
   }
 }
 
@@ -542,11 +561,14 @@ export async function moveItemDownInQueue(itemId: string) {
   });
 
   if (itemBelow) {
-    await prisma.$transaction([
+    const result = await prisma.$transaction([
       prisma.dailyPlanItem.update({ where: { id: item.id }, data: { orderIndex: itemBelow.orderIndex } }),
       prisma.dailyPlanItem.update({ where: { id: itemBelow.id }, data: { orderIndex: item.orderIndex } })
     ]);
-    revalidatePath("/daily-planner");
+    return {
+      updatedDailyPlanItem: result[0],
+      updatedDailyPlanItemAdjacent: result[1]
+    };
   }
 }
 
@@ -580,12 +602,12 @@ export async function logPastEntry(formData: FormData) {
   const diffMs = endDateTime.getTime() - startDateTime.getTime();
   const durationSeconds = Math.round(diffMs / 1000);
 
-  if (durationSeconds <= 0) return { error: "End time must be after start time." };
+  if (durationSeconds <= 0) return;
 
   const planItem = await prisma.dailyPlanItem.findUnique({ where: { id: itemId } });
   if (!planItem) return;
 
-  await prisma.$transaction([
+  const result = await prisma.$transaction([
     prisma.timeEntry.create({
       data: {
         planItemId: planItem.id,
@@ -604,8 +626,8 @@ export async function logPastEntry(formData: FormData) {
   ]);
 
   await normalizeQueueOrder(planItem.date, planItem.userId);
-
-  revalidatePath("/daily-planner");
+  const updatedDailyPlanItem = result[1]
+  return updatedDailyPlanItem
 }
 
 export async function startLiveTask(itemId: string) {
@@ -688,9 +710,8 @@ export async function abandonLiveTask(itemId: string, action: "PUSH" | "SKIP") {
     
     const nextDay = new Date(currentDate);
     nextDay.setUTCDate(currentDate.getUTCDate() + 1);
-    
-    let tomorrowRecord = await prisma.dailyRecord.findUnique({ where: { date_userId: { date: nextDay, userId } }, });
-    if (!tomorrowRecord) tomorrowRecord = await prisma.dailyRecord.create({ data: { date: nextDay, userId, status: "PLANNING" } });
+
+    await prisma.dailyRecord.upsert({ where: {date_userId: { date: nextDay, userId } }, create: { date: nextDay, userId, status: "PLANNING" }, update: {} })
     
     const tomorrowCount = await prisma.dailyPlanItem.count({
       where: { date: nextDay, userId },

@@ -2,8 +2,9 @@
 import Link from "next/link";
 import { Coffee, Settings2 } from "lucide-react";
 import { motion } from "framer-motion";
+import { formatDisplayDateIST } from "@/lib/helpers";
 
-export default function RestDayView({ formattedDate }: { formattedDate: string }) {
+export default function RestDayView() {
   return (
     <main className="min-h-screen bg-[#030712] relative flex justify-center p-4 md:p-12 overflow-hidden selection:bg-teal-500/30">
       <div className="absolute top-[-20%] left-[-10%] w-[60%] h-[60%] bg-teal-900/10 blur-[150px] rounded-full pointer-events-none" />
@@ -15,7 +16,7 @@ export default function RestDayView({ formattedDate }: { formattedDate: string }
         <header className="flex flex-col md:flex-row justify-between items-start md:items-end border-b border-white/5 pb-6 gap-4">
           <div className="space-y-1">
             <span className="text-xs md:text-sm font-bold tracking-widest text-slate-500 uppercase">
-              {formattedDate}
+              {formatDisplayDateIST()}
             </span>
             <h1 className="text-3xl md:text-5xl font-extrabold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-white to-slate-400">
               Recharging mode engaged.

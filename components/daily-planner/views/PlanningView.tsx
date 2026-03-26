@@ -1,40 +1,84 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Settings2, Play, CalendarOff, ChevronDown, CalendarDays, Target, Plus, GripVertical, Loader2 } from "lucide-react";
 import Link from "next/link";
 import QueueItem from "@/components/daily-planner/ui/QueueItem";
-import { addHabitToQueue, addTaskToQueue, startDay, takeDayOff } from "@/actions/daily-planner"
-import { formatShortDisplayDateIST } from "@/lib/helpers";
-import type { Task, Habit, DailyPlanItem } from "@/types/daily_planner";
+import SignOutButton from "@/components/auth/SignOutButton";
+import { addHabitToQueue, addTaskToQueue, getCurrentBacklogTasks, getUserHabits, startDay, takeDayOff } from "@/actions/daily-planner"
+import { formatShortDisplayDateIST, formatDisplayDateIST } from "@/lib/helpers";
+import type { Task, Habit, DailyPlanItem, DailyRecord } from "@/types/daily_planner";
 
 interface PlanningViewProps {
-  backlogTasks: Task[];
-  routines: Habit[];
-  todaysQueue: DailyPlanItem[];
-  totalCycles: number;
-  formattedDate: string;
+  setStatus: React.Dispatch<any>
+  dailyRecord: DailyRecord
 }
 
-export default function PlanningView({ backlogTasks, routines, todaysQueue, totalCycles, formattedDate }: PlanningViewProps) {
-  const [isHabitsOpen, setIsHabitsOpen] = useState(true);
-  const [isTasksOpen, setIsTasksOpen] = useState(true);
-  
-  const [isStarting, setIsStarting] = useState(false);
-  const [isResting, setIsResting] = useState(false);
-  const [loadingItems, setLoadingItems] = useState<string[]>([]);
+export default function PlanningView({setStatus, dailyRecord }: PlanningViewProps) {
+  {/* --- USE STATES --- */}
+  const [backlogTasksState, setBacklogTasksState] = useState<Task[] | []>([]);
+  const [habitsState, setHabitsState] = useState<Habit[] | []>([]);
+  const [todaysQueueState, setTodaysQueueState] = useState<DailyPlanItem[] | []>([]);
+  const [totalCyclesState, setTotalCyclesState] = useState<number>(0);
+  const [toggleHabitsList, setToggleHabitsList] = useState<Boolean>(false);
+  const [toggleBacklogTasksList, setToggleBacklogTasksList] = useState<Boolean>(true);
+  const [isLoading, setIsLoading] = useState<string | null>(null);
 
-  const handleForceHabit = async (id: string) => {
-    setLoadingItems(prev => [...prev, id]);
-    await addHabitToQueue(id);
-    setLoadingItems(prev => prev.filter(i => i !== id));
+  {/* --- USE EFFECTS --- */}
+  useEffect(() => {
+    const fetchData = async () => {
+      const todaysQueue = (dailyRecord.items || []).filter((item) => item.status === "TODO");
+      setTodaysQueueState(todaysQueue)
+      const totalCycles = todaysQueue.reduce((sum, item) => sum + item.estimatedCycles, 0);
+      setTotalCyclesState(totalCycles);
+      const backlogTasks = await getCurrentBacklogTasks();
+      setBacklogTasksState(backlogTasks);
+      const habits = await getUserHabits();
+      setHabitsState(habits);
+    };
+    fetchData();
+  }, [])
+
+  {/* --- HANDLER FUNCTIONS --- */}
+  const handleAddingHabitToQueue = async (id: string) => {
+    setIsLoading(`adding_${id}`)
+    const newDailyPlanItem = await addHabitToQueue(id);
+    if (!newDailyPlanItem) return;
+ 
+    setTodaysQueueState(prev => [...prev, newDailyPlanItem])
+    setTotalCyclesState(prev => prev + newDailyPlanItem.estimatedCycles)
+    setIsLoading(null)
   };
 
-  const handleForceTask = async (id: string, formData: FormData) => {
-    setLoadingItems(prev => [...prev, id]);
-    await addTaskToQueue(id, formData);
-    setLoadingItems(prev => prev.filter(i => i !== id));
+  const handleAddingTaskToQueue = async (id: string, e: React.SubmitEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setIsLoading(`adding_${id}`)
+    const formData = new FormData(e.currentTarget);
+    const result = await addTaskToQueue(id, formData);
+    if (!result) return;
+
+    const {newDailyPlanItem, updatedTask} = result;
+    setTodaysQueueState(prev => [...prev, newDailyPlanItem])
+    setTotalCyclesState(prev => prev + newDailyPlanItem.estimatedCycles)
+    setBacklogTasksState(prev => prev.filter(task => task.id !== updatedTask.id))
+    setIsLoading(null)
+  };
+
+  const handleStartDay = async (e: React.SubmitEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setIsLoading("starting")
+    await startDay();
+    setStatus("ACTIVE")
+    setIsLoading(null)
+  }; 
+
+  const handleRestDay = async (e: React.SubmitEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setIsLoading("resting")
+    await takeDayOff();
+    setStatus("REST_DAY")
+    setIsLoading(null)
   };
 
   return (
@@ -47,50 +91,54 @@ export default function PlanningView({ backlogTasks, routines, todaysQueue, tota
       <header className="flex flex-col md:flex-row justify-between items-start md:items-end border-b border-white/10 pb-6 gap-4">
         <div className="space-y-1">
           <span className="text-xs md:text-sm font-bold tracking-widest text-indigo-400 uppercase">
-            {formattedDate}
+            {formatDisplayDateIST()}
           </span>
           <h1 className="text-3xl md:text-5xl font-extrabold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-white to-slate-400">
             Let's plan your day.
           </h1>
         </div>
         
-        <div className="flex items-center gap-3 bg-white/[0.03] border border-white/10 px-4 py-2 rounded-full shadow-inner">
-          <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
-          <span className="text-[10px] md:text-xs font-bold tracking-widest text-slate-300 uppercase">Planning State</span>
+        <div className="flex space-x-1">
+          <div className="flex items-center gap-3 bg-white/[0.03] border border-white/10 px-4 py-2 rounded-full shadow-inner">
+            <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+            <span className="text-[10px] md:text-xs font-bold tracking-widest text-slate-300 uppercase">Planning State</span>
+          </div>
+          <SignOutButton />
         </div>
       </header>
 
+      {/* --- MAIN GRID --- */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-16">
-        
-        {/* ================= LEFT: UNIVERSE ================= */}
+
+        {/* --- LEFT --- */}
         <div className="lg:col-span-4 space-y-8">
           <h2 className="text-sm font-bold text-slate-500 uppercase tracking-widest pl-1">Backlog</h2>
 
-          {/* 1. HABITS */}
+          {/* HABITS LIST */}
           <div className="space-y-3">
-            <button onClick={() => setIsHabitsOpen(!isHabitsOpen)} className="flex items-center gap-3 text-slate-300 hover:text-white transition-colors w-full group outline-none">
-              <ChevronDown className={`w-4 h-4 text-slate-500 transition-transform duration-300 ${isHabitsOpen ? '' : '-rotate-90'}`} />
+            <button onClick={() => setToggleHabitsList(!toggleHabitsList)} disabled={isLoading !== null} className="flex items-center gap-3 text-slate-300 hover:text-white transition-colors w-full group outline-none">
+              <ChevronDown className={`w-4 h-4 text-slate-500 transition-transform duration-300 ${toggleHabitsList ? '' : '-rotate-90'}`} />
               <CalendarDays className="w-5 h-5 text-emerald-400" />
               <span className="text-sm font-bold uppercase tracking-widest">Habits & Routines</span>
             </button>
             
             <AnimatePresence initial={false}>
-              {isHabitsOpen && (
+              {toggleHabitsList && (
                 <motion.ul 
                   initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }}
                   className="space-y-2 overflow-hidden pl-1"
                 >
-                  {routines.length === 0 ? (
-                    <li className="text-xs text-slate-600 italic py-2 px-6">No habits configured.</li>
+                  {habitsState.length === 0 ? (
+                    <li className="text-xs text-slate-600 italic py-2 px-6">No habits configured. Add some in Manage.</li>
                   ) : (
-                    routines.map((habit) => (
+                    habitsState.map((habit) => (
                       <li key={habit.id} className="bg-white/[0.02] border border-white/[0.05] rounded-xl p-2 pl-4 text-sm text-slate-300 flex items-center justify-between group/item transition-colors hover:bg-white/[0.04]">
                         <span className="truncate pr-4 flex items-center gap-3 font-medium">
                           <div className="w-1.5 h-1.5 rounded-full bg-slate-600 group-hover/item:bg-emerald-500 transition-colors" />
                           {habit.title}
                         </span>
-                        <button onClick={() => handleForceHabit(habit.id)} disabled={loadingItems.includes(habit.id)} className="flex-shrink-0 text-slate-400 hover:text-white bg-white/[0.05] hover:bg-emerald-500/20 p-2 rounded-lg transition-all border border-white/[0.05]">
-                          {loadingItems.includes(habit.id) ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                        <button onClick={() => handleAddingHabitToQueue(habit.id)} disabled={isLoading !== null} className="flex-shrink-0 text-slate-400 hover:text-white bg-white/[0.05] hover:bg-emerald-500/20 p-2 rounded-lg transition-all border border-white/[0.05]">
+                          {isLoading === `adding_${habit.id}` ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
                         </button>
                       </li>
                     ))
@@ -100,25 +148,25 @@ export default function PlanningView({ backlogTasks, routines, todaysQueue, tota
             </AnimatePresence>
           </div>
 
-          {/* 2. TASKS */}
+          {/* BACKLOG TASKS LIST */}
           <div className="space-y-3">
-            <button onClick={() => setIsTasksOpen(!isTasksOpen)} className="flex items-center gap-3 text-slate-300 hover:text-white transition-colors w-full group outline-none">
-              <ChevronDown className={`w-4 h-4 text-slate-500 transition-transform duration-300 ${isTasksOpen ? '' : '-rotate-90'}`} />
+            <button onClick={() => setToggleBacklogTasksList(!toggleBacklogTasksList)} className="flex items-center gap-3 text-slate-300 hover:text-white transition-colors w-full group outline-none">
+              <ChevronDown className={`w-4 h-4 text-slate-500 transition-transform duration-300 ${toggleBacklogTasksList ? '' : '-rotate-90'}`} />
               <Target className="w-5 h-5 text-indigo-400" />
               <span className="text-sm font-bold uppercase tracking-widest">Active Tasks</span>
             </button>
             
             <AnimatePresence initial={false}>
-              {isTasksOpen && (
+              {toggleBacklogTasksList && (
                 <motion.ul 
                   initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }}
                   className="space-y-2 overflow-hidden pl-1"
                 >
                   <AnimatePresence mode="popLayout">
-                    {backlogTasks.length === 0 ? (
-                      <li className="text-xs text-slate-600 italic py-2 px-6">No tasks. Add some in Manage.</li>
+                    {backlogTasksState.length === 0 ? (
+                      <li className="text-xs text-slate-600 italic py-2 px-6">No tasks configured. Add some in Manage.</li>
                     ) : (
-                      backlogTasks.map((task) => (
+                      backlogTasksState.map((task) => (
                         <motion.li 
                           layout initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, scale: 0.9 }}
                           key={task.id} 
@@ -134,7 +182,7 @@ export default function PlanningView({ backlogTasks, routines, todaysQueue, tota
                             )}
                           </span>
                           
-                          <form action={(formData) => handleForceTask(task.id, formData)} className="flex items-center gap-1.5 flex-shrink-0">
+                          <form onSubmit={(e) => handleAddingTaskToQueue(task.id, e)} className="flex items-center gap-1.5 flex-shrink-0">
                             <input 
                               type="number" 
                               name="cycles" 
@@ -142,8 +190,8 @@ export default function PlanningView({ backlogTasks, routines, todaysQueue, tota
                               min="1" max="10" 
                               className="w-10 md:w-12 bg-[#0c1222] border border-white/10 text-slate-200 text-xs md:text-sm px-2 py-2 rounded-lg text-center focus:outline-none focus:border-indigo-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" 
                             />
-                            <button type="submit" disabled={loadingItems.includes(task.id)} className="text-slate-400 hover:text-white bg-white/[0.05] hover:bg-indigo-500/20 p-2 rounded-lg transition-all disabled:opacity-50 border border-white/[0.05]">
-                              {loadingItems.includes(task.id) ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                            <button type="submit" disabled={isLoading !== null} className="text-slate-400 hover:text-white bg-white/[0.05] hover:bg-indigo-500/20 p-2 rounded-lg transition-all disabled:opacity-50 border border-white/[0.05]">
+                              {isLoading === `adding_${task.id}` ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
                             </button>
                           </form>
                         </motion.li>
@@ -156,28 +204,28 @@ export default function PlanningView({ backlogTasks, routines, todaysQueue, tota
           </div>
         </div>
 
-        {/* ================= RIGHT: EXECUTION QUEUE ================= */}
+        {/* --- RIGHT --- */}
         <div className="lg:col-span-8 space-y-6">
           <div className="flex justify-between items-end border-b border-white/10 pb-3">
-            <h2 className="text-sm md:text-base font-bold text-slate-300 uppercase tracking-widest">Today's Execution Queue</h2>
+            <h2 className="text-sm md:text-base font-bold text-slate-300 uppercase tracking-widest">Today's Queue</h2>
             <div className="flex items-center gap-2 bg-indigo-500/10 border border-indigo-500/20 px-3 py-1.5 rounded-lg">
-              <span className="text-[10px] md:text-xs font-bold text-indigo-400 uppercase tracking-widest">Est: {totalCycles} Cycles</span>
+              <span className="text-[10px] md:text-xs font-bold text-indigo-400 uppercase tracking-widest">Est: {totalCyclesState} Cycles</span>
             </div>
           </div>
           
           <div className="min-h-[300px] md:min-h-[500px] flex flex-col">
             
-            {/* MASTER CONTROLS */}
+            {/* ACTION BUTTONS */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-8">
-              <form action={async () => { setIsStarting(true); await startDay(); }} className="sm:col-span-1">
-                <button type="submit" disabled={todaysQueue.length === 0 || isStarting} className="w-full bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-white py-4 rounded-2xl font-bold tracking-widest text-xs md:text-sm transition-all flex justify-center items-center gap-2 shadow-lg shadow-emerald-900/20 disabled:opacity-30 disabled:grayscale">
-                  {isStarting ? <Loader2 className="w-5 h-5 animate-spin" /> : <><Play className="w-4 h-4 fill-current" /> BEGIN WORKDAY</>}
+              <form onSubmit={(e) => handleStartDay(e)} className="sm:col-span-1">
+                <button type="submit" disabled={todaysQueueState.length === 0 || isLoading !== null} className="w-full bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-white py-4 rounded-2xl font-bold tracking-widest text-xs md:text-sm transition-all flex justify-center items-center gap-2 shadow-lg shadow-emerald-900/20 disabled:opacity-30 disabled:grayscale">
+                  {isLoading === "starting"? <Loader2 className="w-5 h-5 animate-spin" /> : <><Play className="w-4 h-4 fill-current" /> START DAY</>}
                 </button>
               </form>
 
-              <form action={async () => { setIsResting(true); await takeDayOff(); }} className="sm:col-span-1">
-                <button type="submit" disabled={isResting} className="w-full bg-white/[0.03] hover:bg-red-500/10 text-slate-300 hover:text-red-400 border border-white/5 hover:border-red-500/30 py-4 rounded-2xl font-bold tracking-widest text-xs md:text-sm transition-all flex justify-center items-center gap-2">
-                  {isResting ? <Loader2 className="w-5 h-5 animate-spin" /> : <><CalendarOff className="w-4 h-4" /> TAKE DAY OFF</>}
+              <form onSubmit={(e) => handleRestDay(e)} className="sm:col-span-1">
+                <button type="submit" disabled={isLoading !== null} className="w-full bg-white/[0.03] hover:bg-red-500/10 text-slate-300 hover:text-red-400 border border-white/5 hover:border-red-500/30 py-4 rounded-2xl font-bold tracking-widest text-xs md:text-sm transition-all flex justify-center items-center gap-2">
+                  {isLoading === "resting"? <Loader2 className="w-5 h-5 animate-spin" /> : <><CalendarOff className="w-4 h-4" /> TAKE DAY OFF</>}
                 </button>
               </form>
 
@@ -189,7 +237,7 @@ export default function PlanningView({ backlogTasks, routines, todaysQueue, tota
             {/* QUEUE LIST */}
             <ul className="space-y-3 md:space-y-4 relative">
               <AnimatePresence mode="popLayout">
-                {todaysQueue.length === 0 ? (
+                {todaysQueueState.length === 0 ? (
                   <motion.div 
                     initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
                     className="text-center py-12 md:py-16 border border-dashed border-white/10 rounded-3xl bg-white/[0.01]"
@@ -198,10 +246,10 @@ export default function PlanningView({ backlogTasks, routines, todaysQueue, tota
                       <Target className="w-6 h-6 md:w-8 md:h-8 text-slate-600" />
                     </div>
                     <p className="text-slate-300 font-medium text-base md:text-lg">Your queue is empty.</p>
-                    <p className="text-slate-500 text-xs md:text-sm mt-1">Click the + buttons on the left to draft your day.</p>
+                    <p className="text-slate-500 text-xs md:text-sm mt-1">Click the MANAGE button on top to draft your day.</p>
                   </motion.div>
                 ) : (
-                  todaysQueue.map((item, index) => (
+                  todaysQueueState.map((item, index) => (
                     <motion.div 
                       layout initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.9, x: 20 }} transition={{ type: "spring", stiffness: 300, damping: 25 }}
                       key={item.id} 
@@ -216,8 +264,11 @@ export default function PlanningView({ backlogTasks, routines, todaysQueue, tota
                           title={item.title} 
                           estimatedCycles={item.estimatedCycles} 
                           isFirst={index === 0} 
-                          isLast={index === todaysQueue.length - 1}
+                          isLast={index === todaysQueueState.length - 1}
                           taskId={item.taskId}
+                          setTodaysQueueState={setTodaysQueueState}
+                          setBacklogTasksState={setBacklogTasksState}
+                          setTotalCyclesState={setTotalCyclesState}
                         />
                       </div>
                     </motion.div>
