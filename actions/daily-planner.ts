@@ -317,7 +317,7 @@ export async function addTaskToBacklog(formData: FormData) {
       where: { date: scheduledDate, userId },
     });
 
-    await prisma.dailyPlanItem.create({
+    const newDailyPlanItem = await prisma.dailyPlanItem.create({
       data: {
         date: scheduledDate,
         userId,
@@ -329,18 +329,127 @@ export async function addTaskToBacklog(formData: FormData) {
         status: "TODO",
       }
     });
+    return { ...task, dailyItems: [newDailyPlanItem] };
   }
 
-  revalidatePath("/daily-planner/manage");
-  revalidatePath("/daily-planner");
+  return { ...task, dailyItems: [] };
+}
+
+export async function editTaskInBacklog(formData: FormData) {
+  const userId = await getUserId();
+  const taskId = formData.get("taskId") as string;
+  const title = formData.get("title") as string;
+  const scheduledDateStr = formData.get("scheduledDate") as string;
+
+  if (!taskId || !title || title.trim() === "") return null;
+
+  const existingTask = await prisma.task.findUnique({
+    where: { id: taskId },
+    include: {
+      dailyItems: {
+        where: { status: "TODO" },
+        orderBy: { date: "asc" },
+        take: 1,
+      },
+    },
+  });
+
+  if (!existingTask || existingTask.userId !== userId) return null;
+
+  const updatedTask = await prisma.task.update({
+    where: { id: taskId },
+    data: {
+      title: title.trim(),
+      status: scheduledDateStr ? "QUEUED" : "BACKLOG",
+    },
+  });
+
+  await prisma.dailyPlanItem.updateMany({
+    where: { taskId, status: "TODO" },
+    data: { title: title.trim() },
+  });
+
+  const existingFutureItem = existingTask.dailyItems?.[0] ?? null;
+  let dailyItems: any[] = [];
+
+  if (scheduledDateStr) {
+    const scheduledDate = new Date(`${scheduledDateStr}T00:00:00.000Z`);
+
+    if (existingFutureItem) {
+      if (existingFutureItem.date.getTime() !== scheduledDate.getTime()) {
+        await prisma.dailyPlanItem.delete({ where: { id: existingFutureItem.id } });
+        await normalizeQueueOrder(existingFutureItem.date, userId);
+
+        // Create new one on new date
+        await prisma.dailyRecord.upsert({
+          where: { date_userId: { date: scheduledDate, userId } },
+          create: { date: scheduledDate, userId, status: "PLANNING" },
+          update: {},
+        });
+
+        const count = await prisma.dailyPlanItem.count({
+          where: { date: scheduledDate, userId },
+        });
+
+        const newItem = await prisma.dailyPlanItem.create({
+          data: {
+            date: scheduledDate,
+            userId,
+            taskId,
+            title: title.trim(),
+            estimatedCycles: existingFutureItem.estimatedCycles,
+            originalCycles: existingFutureItem.originalCycles,
+            orderIndex: count,
+            status: "TODO",
+          },
+        });
+        dailyItems = [newItem];
+      } else {
+        const refreshed = await prisma.dailyPlanItem.findFirst({
+          where: { taskId, status: "TODO" },
+          orderBy: { date: "asc" },
+        });
+        if (refreshed) dailyItems = [refreshed];
+      }
+    } else {
+      await prisma.dailyRecord.upsert({
+        where: { date_userId: { date: scheduledDate, userId } },
+        create: { date: scheduledDate, userId, status: "PLANNING" },
+        update: {},
+      });
+
+      const count = await prisma.dailyPlanItem.count({
+        where: { date: scheduledDate, userId },
+      });
+
+      const newItem = await prisma.dailyPlanItem.create({
+        data: {
+          date: scheduledDate,
+          userId,
+          taskId,
+          title: title.trim(),
+          estimatedCycles: 1,
+          originalCycles: 1,
+          orderIndex: count,
+          status: "TODO",
+        },
+      });
+      dailyItems = [newItem];
+    }
+  } else {
+    if (existingFutureItem) {
+      await prisma.dailyPlanItem.delete({ where: { id: existingFutureItem.id } });
+      await normalizeQueueOrder(existingFutureItem.date, userId);
+    }
+  }
+
+  return { ...updatedTask, dailyItems };
 }
 
 export async function deleteTaskFromBacklog(id: string) {
   await prisma.task.delete({
     where: { id },
   });
-  
-  revalidatePath("/daily-planner/manage");
 }
 
 //-----------------------------------------------------------
@@ -367,12 +476,35 @@ export async function addHabitToBacklog(formData: FormData) {
 
   if (!title || title.trim() === "") return;
 
-  await prisma.habit.create({
+  const newHabit = await prisma.habit.create({
     data: { title: title.trim(), defaultCycles: cycles, daysOfWeek, userId },
   });
-  
-  revalidatePath("/daily-planner/manage");
-  revalidatePath("/daily-planner");
+
+  return newHabit
+}
+
+export async function editHabitInBacklog(formData: FormData) {
+  const userId = await getUserId();
+  const habitId = formData.get("habitId") as string;
+  const title = formData.get("title") as string;
+  const defaultCycles = parseInt(formData.get("cycles") as string) || 1;
+  const daysOfWeek = formData.getAll("daysOfWeek").map(Number);
+
+  if (!habitId || !title || title.trim() === "" || daysOfWeek.length === 0) return;
+
+  const existingHabit = await prisma.habit.findUnique({ where: { id: habitId } });
+  if (!existingHabit || existingHabit.userId !== userId) return;
+
+  const updatedHabit = await prisma.habit.update({
+    where: { id: habitId },
+    data: {
+      title: title.trim(),
+      daysOfWeek,
+      defaultCycles
+    },
+  });
+
+  return updatedHabit;
 }
 
 export async function deleteHabitFromBacklog(id: string) {

@@ -11,6 +11,17 @@ export function getCurrentDateIST(): Date {
   return new Date(dateStr + "T00:00:00.000Z");
 }
 
+export function getDateString(date: Date): string {
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone: TZ,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+  const dateStr = formatter.format(new Date(date));
+  return dateStr;
+}
+
 export function getCurrentDateTimeIST(): Date {
   const parts = new Intl.DateTimeFormat("en-US", {
     timeZone: TZ,
@@ -69,6 +80,27 @@ export function formatShortDisplayDateIST(dateString: string | Date): string {
     month: "short",
     day: "numeric",
   }).format(new Date(dateString));
+}
+
+export function getDisplayDateIST(date: string | Date): string {
+  if (!date) return "Schedule";
+
+  const targetDate = new Date(date);
+  const currentDate = getCurrentDateIST();
+  const tomorrowDate = new Date(currentDate);
+  tomorrowDate.setUTCDate(tomorrowDate.getUTCDate() + 1);
+  const yesterdayDate = new Date(currentDate);
+  yesterdayDate.setUTCDate(yesterdayDate.getUTCDate() - 1);
+
+  if (targetDate.getTime() === currentDate.getTime()) return "Today";
+  if (targetDate.getTime() === tomorrowDate.getTime()) return "Tomorrow";
+  if (targetDate.getTime() === yesterdayDate.getTime()) return "Yesterday";
+
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone: TZ,
+    month: "short",
+    day: "numeric",
+  }).format(targetDate);
 }
 
 export function getISTDayOfWeek(): number {
