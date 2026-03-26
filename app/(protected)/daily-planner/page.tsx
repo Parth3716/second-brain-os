@@ -3,10 +3,6 @@ import { initializeToday } from "@/actions/daily-planner"
 import { getCurrentDateIST } from "@/lib/helpers"
 import { getUserId } from "@/lib/auth";
 import DailyPlannerClientHome from "@/components/daily-planner/views/DailyPlannerClientHome";
-import PlanningView from "@/components/daily-planner/views/PlanningView"
-import HUDView from "@/components/daily-planner/views/HUDView"
-import ReviewView from "@/components/daily-planner/views/ReviewView"
-import RestDayView from "@/components/daily-planner/views/RestDayView";
 
 export default async function DailyPlannerHomePage() {
   const userId = await getUserId();

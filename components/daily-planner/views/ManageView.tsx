@@ -6,20 +6,8 @@ import { Plus, Trash2, ArrowLeft, Settings2, CheckCircle2, Target, CalendarDays,
 import Link from "next/link";
 import { addTaskToBacklog, deleteTaskFromBacklog, addHabitToBacklog, deleteHabitFromBacklog, editTaskInBacklog, editHabitInBacklog } from "@/actions/daily-planner"
 import SignOutButton from "@/components/auth/SignOutButton";
-import { formatShortDisplayDateIST, getDisplayDateIST, getDateString } from "@/lib/helpers";
+import { formatShortDisplayDateIST, getDisplayDateIST, getDateString, DAYS, formatDays } from "@/lib/helpers";
 import type { Task, Habit } from "@/types/daily_planner";
-
-const DAYS = [
-  { value: 1, label: "M" }, { value: 2, label: "T" }, { value: 3, label: "W" },
-  { value: 4, label: "T" }, { value: 5, label: "F" }, { value: 6, label: "S" }, { value: 0, label: "S" },
-];
-
-function formatDays(daysArray: number[]) {
-  if (daysArray.length === 7) return "Every day";
-  if (daysArray.length === 5 && !daysArray.includes(0) && !daysArray.includes(6)) return "Weekdays";
-  const dayMap: Record<number, string> = { 1: "Mon", 2: "Tue", 3: "Wed", 4: "Thu", 5: "Fri", 6: "Sat", 0: "Sun" };
-  return [...daysArray].sort((a, b) => (a === 0 ? 7 : a) - (b === 0 ? 7 : b)).map(d => dayMap[d]).join(", ");
-}
 
 export default function ManageView({ initialTasks, initialHabits }: { initialTasks: Task[], initialHabits: Habit[] }) {
   {/* --- USE STATES --- */ }

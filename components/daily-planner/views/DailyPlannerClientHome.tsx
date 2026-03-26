@@ -2,22 +2,26 @@
 
 import { useState } from "react";
 import PlanningView from "./PlanningView";
+import HUDView from "@/components/daily-planner/views/HUDView"
 import RestDayView from "./RestDayView";
 import type { DailyRecord } from "@/types/daily_planner";
 
-interface DailyPlannerClientHomeProps {
-  initalStatus: string
-  dailyRecord: DailyRecord
-}
-
-function DailyPlannerClientHome({initalStatus, dailyRecord}: DailyPlannerClientHomeProps) {
-    const [status, setStatus] = useState(initalStatus)
+function DailyPlannerClientHome({initalStatus, dailyRecord}: {initalStatus: string, dailyRecord: DailyRecord}) {
+    const [status, setStatus] = useState<string>(initalStatus);
 
     if (status === "PLANNING") {
           return (
               <PlanningView
                 setStatus={setStatus}
                 dailyRecord={dailyRecord}
+              />
+          );
+    }
+
+    if (status === "ACTIVE") {
+          return (
+              <HUDView
+                setStatus={setStatus}
               />
           );
     }

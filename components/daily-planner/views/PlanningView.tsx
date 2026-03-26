@@ -10,12 +10,7 @@ import { addHabitToQueue, addTaskToQueue, getCurrentBacklogTasks, getUserHabits,
 import { formatShortDisplayDateIST, formatDisplayDateIST } from "@/lib/helpers";
 import type { Task, Habit, DailyPlanItem, DailyRecord } from "@/types/daily_planner";
 
-interface PlanningViewProps {
-  setStatus: React.Dispatch<any>
-  dailyRecord: DailyRecord
-}
-
-export default function PlanningView({setStatus, dailyRecord }: PlanningViewProps) {
+export default function PlanningView({setStatus, dailyRecord }: {setStatus: React.Dispatch<string>, dailyRecord: DailyRecord}) {
   {/* --- USE STATES --- */}
   const [backlogTasksState, setBacklogTasksState] = useState<Task[] | []>([]);
   const [habitsState, setHabitsState] = useState<Habit[] | []>([]);

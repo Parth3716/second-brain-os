@@ -1,4 +1,13 @@
 const TZ = "Asia/Kolkata";
+export const DAYS = [
+  { value: 1, label: "M", name: "Mon" },
+  { value: 2, label: "T", name: "Tue" },
+  { value: 3, label: "W", name: "Wed" },
+  { value: 4, label: "T", name: "Thu" },
+  { value: 5, label: "F", name: "Fri" },
+  { value: 6, label: "S", name: "Sat" },
+  { value: 0, label: "S", name: "Sun" },
+];
 
 export function getCurrentDateIST(): Date {
   const formatter = new Intl.DateTimeFormat("en-CA", {
@@ -113,4 +122,14 @@ export function getISTDayOfWeek(): number {
     Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6,
   };
   return map[dateStr] ?? 0;
+}
+
+export function formatDays(daysArray: number[]): string {
+  if (daysArray.length === 7) return "Every day";
+  if (daysArray.length === 5 && !daysArray.includes(0) && !daysArray.includes(6)) return "Weekdays";
+  if (daysArray.length === 2 && daysArray.includes(0) && daysArray.includes(6)) return "Weekends";
+  return DAYS
+    .filter(d => daysArray.includes(d.value))
+    .map(d => d.name)
+    .join(", ");
 }

@@ -19,8 +19,8 @@ type QueueItemProps = {
 
 export default function QueueItem({ id, title, estimatedCycles, isFirst, isLast, taskId, setTodaysQueueState, setBacklogTasksState, setTotalCyclesState }: QueueItemProps) {
   {/* --- USE STATES --- */ }
-  const [isLogModalOpen, setIsLogModalOpen] = useState(false);
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isLogModalOpen, setIsLogModalOpen] = useState<Boolean>(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState<Boolean>(false);
   const [isLoading, setIsLoading] = useState<string | null>(null);
 
   {/* --- HANDLER FUNCTIONS --- */ }
