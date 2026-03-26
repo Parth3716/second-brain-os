@@ -1,5 +1,5 @@
 import {prisma} from "@/lib/prisma_client"
-import { initializeDailyRecordAndHabits, cleanupGhostDays } from "@/actions/daily-planner"
+import { initializeToday } from "@/actions/daily-planner"
 import { getCurrentDateIST } from "@/lib/helpers"
 import { getUserId } from "@/lib/auth";
 import DailyPlannerClientHome from "@/components/daily-planner/views/DailyPlannerClientHome";
@@ -10,8 +10,7 @@ import RestDayView from "@/components/daily-planner/views/RestDayView";
 
 export default async function DailyPlannerHomePage() {
   const userId = await getUserId();
-  await cleanupGhostDays();
-  await initializeDailyRecordAndHabits();
+  await initializeToday();
   const today = getCurrentDateIST();
 
   const dailyRecord = await prisma.dailyRecord.findUnique({
