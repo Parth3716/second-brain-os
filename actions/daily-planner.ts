@@ -78,57 +78,64 @@ export async function initializeToday() {
   const userId = await getUserId();
   const currentDate = getCurrentDateIST();
 
-  const tasksToRollover = await cleanupGhostDays(userId, currentDate);
-
-  await prisma.dailyRecord.upsert({
+  const dailyRecord = await prisma.dailyRecord.findUnique({
     where: { date_userId: { date: currentDate, userId } },
-    create: { date: currentDate, userId, status: "PLANNING" },
-    update: {},
+    include: { items: { orderBy: { orderIndex: 'asc' } } }
   });
 
-  if (tasksToRollover.length > 0) {
-    const existingCount = await prisma.dailyPlanItem.count({
-      where: { date: currentDate, userId },
+  if(!dailyRecord) {
+    await prisma.dailyRecord.upsert({
+        where: { date_userId: { date: currentDate, userId } },
+        create: { date: currentDate, userId, status: "PLANNING" },
+        update: {},
     });
 
-    await prisma.dailyPlanItem.createMany({
-      data: tasksToRollover.map((task, index) => ({
-        date: currentDate,
-        taskId: task.taskId,
-        userId,
-        title: task.title,
-        estimatedCycles: task.estimatedCycles,
-        originalCycles: task.originalCycles,
-        orderIndex: existingCount + index,
-        status: "TODO",
-      })),
-      skipDuplicates: true,
-    });
-  }
+    const tasksToRollover = await cleanupGhostDays(userId, currentDate);
 
-  const currentDayOfWeek = getISTDayOfWeek();
-  const todaysHabits = await prisma.habit.findMany({
-    where: { userId, daysOfWeek: { has: currentDayOfWeek } },
-  });
+    if (tasksToRollover.length > 0) {
+      const existingCount = await prisma.dailyPlanItem.count({
+        where: { date: currentDate, userId },
+      });
 
-  if (todaysHabits.length > 0) {
-    const currentCount = await prisma.dailyPlanItem.count({
-      where: { date: currentDate, userId },
+      await prisma.dailyPlanItem.createMany({
+        data: tasksToRollover.map((task, index) => ({
+          date: currentDate,
+          taskId: task.taskId,
+          userId,
+          title: task.title,
+          estimatedCycles: task.estimatedCycles,
+          originalCycles: task.originalCycles,
+          orderIndex: existingCount + index,
+          status: "TODO",
+        })),
+        skipDuplicates: true,
+      });
+    }
+
+    const currentDayOfWeek = getISTDayOfWeek();
+    const todaysHabits = await prisma.habit.findMany({
+      where: { userId, daysOfWeek: { has: currentDayOfWeek } },
     });
 
-    await prisma.dailyPlanItem.createMany({
-      data: todaysHabits.map((habit, index) => ({
-        date: currentDate,
-        userId,
-        habitId: habit.id,
-        title: habit.title,
-        estimatedCycles: habit.defaultCycles,
-        originalCycles: habit.defaultCycles,
-        orderIndex: currentCount + index,
-        status: "TODO",
-      })),
-      skipDuplicates: true,
-    });
+    if (todaysHabits.length > 0) {
+      const currentCount = await prisma.dailyPlanItem.count({
+        where: { date: currentDate, userId },
+      });
+
+      await prisma.dailyPlanItem.createMany({
+        data: todaysHabits.map((habit, index) => ({
+          date: currentDate,
+          userId,
+          habitId: habit.id,
+          title: habit.title,
+          estimatedCycles: habit.defaultCycles,
+          originalCycles: habit.defaultCycles,
+          orderIndex: currentCount + index,
+          status: "TODO",
+        })),
+        skipDuplicates: true,
+      });
+    }
   }
 }
 
